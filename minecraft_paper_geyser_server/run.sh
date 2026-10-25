@@ -1,0 +1,407 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+RED='\033[1;31m'
+YELLOW='\033[1;33m'
+CYAN='\033[1;36m'
+NC='\033[0m'
+
+log_info()  { echo -e "${CYAN}[INFO]${NC} $*"; }
+log_warn()  { echo -e "${YELLOW}[WARN]${NC} $*"; }
+log_error() { echo -e "${RED}[ERROR]${NC} $*" >&2; }
+
+echo "-----------------------------------------------------------"
+echo " Minecraft Paper + Geyser (Home Assistant Add-on)"
+echo "-----------------------------------------------------------"
+
+# -----------------------------------------------------------
+# Konstanten
+# -----------------------------------------------------------
+# Die Paper-Downloads-API (Fill v3) verlangt einen eindeutigen User-Agent
+# mit Kontakt-URL. Bei einem Fork bitte die URL anpassen.
+USER_AGENT="${USER_AGENT:-ha-addon-minecraft-paper-geyser/0.0.1 (https://github.com/cyclemat/Home-Assistant-Gameservers-ADDONS)}"
+FILL_API="${FILL_API:-https://fill.papermc.io/v3/projects/paper}"
+GEYSER_URL="${GEYSER_URL:-https://download.geysermc.org/v2/projects/geyser/versions/latest/builds/latest/downloads/spigot}"
+FLOODGATE_URL="${FLOODGATE_URL:-https://download.geysermc.org/v2/projects/floodgate/versions/latest/builds/latest/downloads/spigot}"
+
+JAVA_PORT="25565"
+BEDROCK_PORT="19132"
+TMP_BASE="${TMPDIR:-/tmp}"
+
+# -----------------------------------------------------------
+# Optionen
+# -----------------------------------------------------------
+OPTIONS_FILE="${OPTIONS_FILE:-/data/options.json}"
+
+# Liefert den Wert einer Option als Text, leer wenn nicht gesetzt (false bleibt "false")
+opt() { jq -r --arg k "$1" '.[$k] | if . == null then empty else tostring end' "${OPTIONS_FILE}"; }
+
+DATA_DIR="$(opt data_dir)";                     : "${DATA_DIR:=/share/minecraft-paper}"
+XMS_MB="$(opt xms_mb)";                         : "${XMS_MB:=1024}"
+XMX_MB="$(opt xmx_mb)";                         : "${XMX_MB:=4096}"
+MC_VERSION="$(opt mc_version)";                 : "${MC_VERSION:=latest}"
+ACCEPT_EULA="$(opt accept_eula)"
+ALLOW_EXPERIMENTAL="$(opt allow_experimental)"; : "${ALLOW_EXPERIMENTAL:=false}"
+BEDROCK_SUPPORT="$(opt bedrock_support)";       : "${BEDROCK_SUPPORT:=true}"
+UPDATE_PLUGINS="$(opt update_plugins)";         : "${UPDATE_PLUGINS:=true}"
+JAVA_MAJOR_OPT="$(opt java_major)"
+mapfile -t EXTRA_URLS < <(jq -r '.plugin_urls // [] | .[]' "${OPTIONS_FILE}")
+
+# -----------------------------------------------------------
+# EULA: nur mit ausdrücklicher Zustimmung
+# -----------------------------------------------------------
+if [[ "${ACCEPT_EULA}" != "true" ]]; then
+  log_error "Die Minecraft EULA (https://aka.ms/MinecraftEULA) wurde nicht akzeptiert."
+  log_error "Aktiviere die Option 'accept_eula' in der Add-on-Konfiguration und starte neu."
+  exit 1
+fi
+
+# -----------------------------------------------------------
+# Eingaben prüfen
+# -----------------------------------------------------------
+if ! [[ "${XMS_MB}" =~ ^[0-9]+$ && "${XMX_MB}" =~ ^[0-9]+$ ]]; then
+  log_error "xms_mb und xmx_mb müssen ganze Zahlen sein (aktuell: '${XMS_MB}' / '${XMX_MB}')"
+  exit 1
+fi
+if (( XMS_MB > XMX_MB )); then
+  log_error "xms_mb (${XMS_MB}) darf nicht größer als xmx_mb (${XMX_MB}) sein"
+  exit 1
+fi
+if [[ -n "${JAVA_MAJOR_OPT}" && ! "${JAVA_MAJOR_OPT}" =~ ^[0-9]+$ ]]; then
+  log_error "java_major muss eine ganze Zahl sein (aktuell: '${JAVA_MAJOR_OPT}')"
+  exit 1
+fi
+if ! [[ "${MC_VERSION}" =~ ^[A-Za-z0-9._-]+$ ]]; then
+  log_error "Ungültige Minecraft-Version: '${MC_VERSION}'"
+  exit 1
+fi
+
+mkdir -p "${DATA_DIR}"
+cd "${DATA_DIR}"
+
+# -----------------------------------------------------------
+# Download-Helfer (nur https, auch bei Weiterleitungen)
+# -----------------------------------------------------------
+# fetch <URL> <Ziel>   lädt eine Datei, bei Fehlern Exit-Code != 0
+fetch() {
+  curl -fsSL --retry 3 --retry-delay 2 --proto '=https' --proto-redir '=https' \
+    -H "User-Agent: ${USER_AGENT}" "$1" -o "$2"
+}
+
+# fill_get <URL>   liefert den Antworttext der Paper-API
+fill_get() {
+  curl -fsSL --retry 3 --retry-delay 2 --proto '=https' --proto-redir '=https' \
+    -H "User-Agent: ${USER_AGENT}" "$1"
+}
+
+# -----------------------------------------------------------
+# Paper-Version und Build auflösen (Fill v3)
+# -----------------------------------------------------------
+PAPER_VERSION=""
+PAPER_BUILD=""
+PAPER_CHANNEL=""
+PAPER_URL=""
+PAPER_SHA256=""
+
+# Setzt PAPER_*; nimmt standardmäßig den neuesten Build mit Channel STABLE.
+# Bei "latest" wird die neueste Version genommen, für die ein solcher Build existiert.
+resolve_paper() {
+  local all_json="false" project_json candidates v builds_json build_json tries=0
+  [[ "${ALLOW_EXPERIMENTAL}" == "true" ]] && all_json="true"
+
+  if [[ "${MC_VERSION}" == "latest" ]]; then
+    if ! project_json="$(fill_get "${FILL_API}")"; then
+      log_error "Paper-API (fill.papermc.io) nicht erreichbar"
+      return 1
+    fi
+    # Neueste zuerst. Bei gleicher Basis steht die Release-Version vor ihren
+    # Pre-Releases und Release-Candidates (z. B. 26.3 vor 26.3-rc-3).
+    candidates="$(jq -r '.versions | to_entries[] | .value[]
+        | [(split("-")[0]), (if contains("-") then "0" else "1" end), .] | @tsv' <<<"${project_json}" \
+      | sort -t$'\t' -k1,1Vr -k2,2nr -k3,3Vr | cut -f3)"
+    if [[ "${all_json}" != "true" ]]; then
+      # Pre-Releases und Release-Candidates (enthalten "-") überspringen
+      candidates="$(grep -v -- '-' <<<"${candidates}" || true)"
+    fi
+  else
+    candidates="${MC_VERSION}"
+  fi
+
+  for v in ${candidates}; do
+    (( ++tries > 10 )) && break
+    builds_json="$(fill_get "${FILL_API}/versions/${v}/builds" 2>/dev/null)" || continue
+    build_json="$(jq -c --argjson all "${all_json}" \
+      'first(.[] | select(type == "object" and .id != null and ($all or .channel == "STABLE"))) // empty' \
+      <<<"${builds_json}" 2>/dev/null || true)"
+    [[ -n "${build_json}" ]] || continue
+
+    PAPER_URL="$(jq -r '.downloads["server:default"].url // empty' <<<"${build_json}")"
+    [[ -n "${PAPER_URL}" ]] || continue
+
+    PAPER_VERSION="${v}"
+    PAPER_BUILD="$(jq -r '.id' <<<"${build_json}")"
+    PAPER_CHANNEL="$(jq -r '.channel // "?"' <<<"${build_json}")"
+    PAPER_SHA256="$(jq -r '.downloads["server:default"].checksums.sha256 // empty' <<<"${build_json}")"
+    return 0
+  done
+  return 1
+}
+
+if ! resolve_paper; then
+  if [[ "${MC_VERSION}" == "latest" ]]; then
+    log_error "Keine passende Paper-Version gefunden (allow_experimental=${ALLOW_EXPERIMENTAL})"
+  else
+    log_error "Für Version '${MC_VERSION}' gibt es keinen passenden Paper-Build (allow_experimental=${ALLOW_EXPERIMENTAL})"
+  fi
+  exit 1
+fi
+log_info "Paper ${PAPER_VERSION}, Build ${PAPER_BUILD} (${PAPER_CHANNEL})"
+if [[ "${PAPER_CHANNEL}" != "STABLE" || "${PAPER_VERSION}" == *-* ]]; then
+  log_warn "Experimenteller Build oder Vorabversion, erhält laut PaperMC keinen Support und ist fehleranfällig"
+fi
+
+# -----------------------------------------------------------
+# Java-Version bestimmen
+# -----------------------------------------------------------
+JAVA_MAJOR="${JAVA_MAJOR_OPT}"
+if [[ -z "${JAVA_MAJOR}" ]]; then
+  VERSION_JSON="$(fill_get "${FILL_API}/versions/${PAPER_VERSION}" 2>/dev/null || true)"
+  JAVA_MAJOR="$(jq -r '.version.java.version.minimum // empty' <<<"${VERSION_JSON}" 2>/dev/null || true)"
+fi
+if [[ -z "${JAVA_MAJOR}" || ! "${JAVA_MAJOR}" =~ ^[0-9]+$ ]]; then
+  JAVA_MAJOR="25"
+  log_warn "Benötigte Java-Version nicht ermittelbar, nutze Java ${JAVA_MAJOR} (setze 'java_major' zum Überschreiben)"
+fi
+
+# -----------------------------------------------------------
+# Java automatisch installieren (Temurin, passend zur Version)
+# -----------------------------------------------------------
+JRE_ROOT="${DATA_DIR}/.jre"
+JRE_DIR="${JRE_ROOT}/${JAVA_MAJOR}"
+JAVA_HOME="${JRE_DIR}"
+JAVA_BIN="${JAVA_HOME}/bin/java"
+
+install_java() {
+  if [[ -x "${JAVA_BIN}" ]]; then
+    return 0
+  fi
+
+  log_info "Java ${JAVA_MAJOR} nicht gefunden, installiere Temurin JRE"
+
+  local arch adoptium_arch url tmp_tar tmp_dir
+  arch="$(uname -m)"
+  case "${arch}" in
+    x86_64|amd64)  adoptium_arch="x64" ;;
+    aarch64|arm64) adoptium_arch="aarch64" ;;
+    *)
+      log_error "Nicht unterstützte Architektur: ${arch}"
+      exit 1
+      ;;
+  esac
+
+  url="https://api.adoptium.net/v3/binary/latest/${JAVA_MAJOR}/ga/linux/${adoptium_arch}/jre/hotspot/normal/eclipse?project=jdk"
+  tmp_tar="${TMP_BASE}/jre${JAVA_MAJOR}.tar.gz"
+  tmp_dir="${JRE_DIR}.tmp"
+
+  rm -rf "${tmp_dir}"
+  mkdir -p "${tmp_dir}"
+  fetch "${url}" "${tmp_tar}"
+  tar -xzf "${tmp_tar}" -C "${tmp_dir}" --strip-components=1
+  rm -f "${tmp_tar}"
+
+  [[ -x "${tmp_dir}/bin/java" ]] || { log_error "Java Installation fehlgeschlagen"; exit 1; }
+
+  rm -rf "${JRE_DIR}"
+  mv "${tmp_dir}" "${JRE_DIR}"
+
+  # Ältere Java-Versionen aufräumen
+  find "${JRE_ROOT}" -mindepth 1 -maxdepth 1 ! -name "${JAVA_MAJOR}" -exec rm -rf {} + 2>/dev/null || true
+}
+
+install_java
+export JAVA_HOME
+export PATH="${JAVA_HOME}/bin:${PATH}"
+log_info "Java Version: $(java -version 2>&1 | head -n1)"
+
+# -----------------------------------------------------------
+# Paper-JAR herunterladen (mit SHA-256-Prüfung)
+# -----------------------------------------------------------
+PAPER_JAR="paper.jar"
+PAPER_MARKER=".paper_build.txt"
+CURRENT_BUILD="${PAPER_VERSION} ${PAPER_BUILD}"
+
+if [[ ! -f "${PAPER_JAR}" || ! -f "${PAPER_MARKER}" || "$(cat "${PAPER_MARKER}")" != "${CURRENT_BUILD}" ]]; then
+  if [[ -f "${PAPER_MARKER}" ]]; then
+    OLD_VERSION="$(cut -d' ' -f1 "${PAPER_MARKER}")"
+    if [[ "${OLD_VERSION}" != "${PAPER_VERSION}" ]]; then
+      log_warn "Minecraft-Version wechselt von ${OLD_VERSION} auf ${PAPER_VERSION}. Sichere vorher deine Welt, ein Downgrade kann Welten beschädigen."
+    fi
+  fi
+
+  log_info "Lade Paper herunter"
+  fetch "${PAPER_URL}" "${PAPER_JAR}.tmp"
+
+  if [[ -n "${PAPER_SHA256}" ]]; then
+    if ! echo "${PAPER_SHA256}  ${PAPER_JAR}.tmp" | sha256sum -c - >/dev/null 2>&1; then
+      rm -f "${PAPER_JAR}.tmp"
+      log_error "Prüfsumme des Paper-JAR stimmt nicht überein, Download verworfen"
+      exit 1
+    fi
+    log_info "Prüfsumme (SHA-256) ok"
+  else
+    log_warn "Die API lieferte keine Prüfsumme, Download ist nicht verifiziert"
+  fi
+
+  mv "${PAPER_JAR}.tmp" "${PAPER_JAR}"
+  echo "${CURRENT_BUILD}" > "${PAPER_MARKER}"
+fi
+
+# -----------------------------------------------------------
+# Plugins (Geyser, Floodgate, eigene)
+# -----------------------------------------------------------
+mkdir -p plugins
+
+# download_plugin <Anzeigename> <URL> <Dateiname>
+# Bei Fehlern bleibt eine vorhandene Version erhalten, der Start wird nicht abgebrochen.
+download_plugin() {
+  local label="$1" url="$2" target="plugins/$3"
+
+  if [[ -f "${target}" && "${UPDATE_PLUGINS}" != "true" ]]; then
+    log_info "${label}: vorhanden, Updates deaktiviert (update_plugins=false)"
+    return 0
+  fi
+
+  log_info "Lade ${label}"
+  if fetch "${url}" "${target}.tmp" 2>/dev/null \
+     && [[ "$(head -c 2 "${target}.tmp")" == "PK" ]]; then
+    mv "${target}.tmp" "${target}"
+  else
+    rm -f "${target}.tmp"
+    if [[ -f "${target}" ]]; then
+      log_warn "${label}: Download fehlgeschlagen, nutze die vorhandene Version"
+    else
+      log_warn "${label}: Download fehlgeschlagen, das Plugin ist NICHT installiert"
+    fi
+  fi
+}
+
+# Legt die Geyser-Konfiguration einmalig an. Danach darf sie frei bearbeitet werden,
+# eine vorhandene Datei wird nie überschrieben. Ohne diese Datei würde Geyser seine
+# Standardwerte schreiben, und die passen nicht:
+#   java.auth-type floodgate: Bedrock-Spieler brauchen keinen Java-Account
+#   bedrock.transport nethernet: Bedrock-Clients ab 26.60 (geplant am 27.10.2026)
+#     verbinden sich nicht mehr per RakNet, Geyser nutzt dann TCP (Signaling) und UDP auf dem Bedrock-Port
+seed_geyser_config() {
+  local dir="plugins/Geyser-Spigot"
+  [[ -f "plugins/Geyser-Spigot.jar" && ! -f "${dir}/config.yml" ]] || return 0
+
+  if [[ ! -f "plugins/floodgate-spigot.jar" ]]; then
+    log_warn "Floodgate fehlt, Geyser-Konfiguration wird nicht vorbereitet (Bedrock-Spieler bräuchten einen Java-Account)"
+    return 0
+  fi
+
+  mkdir -p "${dir}"
+  cat > "${dir}/config.yml" <<'EOF'
+bedrock:
+  transport: nethernet
+java:
+  auth-type: floodgate
+config-version: 11
+EOF
+  log_info "Geyser-Konfiguration angelegt (Floodgate-Login, NetherNet)"
+}
+
+if [[ "${BEDROCK_SUPPORT}" == "true" ]]; then
+  download_plugin "Geyser (Bedrock-Brücke)" "${GEYSER_URL}" "Geyser-Spigot.jar"
+  download_plugin "Floodgate (Bedrock-Login ohne Java-Account)" "${FLOODGATE_URL}" "floodgate-spigot.jar"
+  seed_geyser_config
+fi
+
+idx=0
+for url in "${EXTRA_URLS[@]:-}"; do
+  [[ -n "${url}" ]] || continue
+  idx=$((idx + 1))
+  if [[ "${url}" != https://* ]]; then
+    log_warn "Plugin-URL ignoriert (nur https erlaubt): ${url}"
+    continue
+  fi
+  base="${url%%\?*}"
+  base="${base##*/}"
+  if [[ "${base}" =~ ^[A-Za-z0-9._+-]+\.jar$ ]]; then
+    name="${base}"
+  else
+    name="extra-plugin-${idx}.jar"
+  fi
+  download_plugin "Plugin ${name}" "${url}" "${name}"
+done
+
+# -----------------------------------------------------------
+# EULA (Zustimmung wurde oben geprüft)
+# -----------------------------------------------------------
+cat > ./eula.txt <<'EOF'
+#By changing the setting below to TRUE you are indicating your agreement to the Minecraft EULA (https://aka.ms/MinecraftEULA).
+eula=true
+EOF
+log_info "EULA gemäß Konfiguration akzeptiert"
+
+# -----------------------------------------------------------
+# server.properties: Java-Port fest setzen
+# -----------------------------------------------------------
+if [[ -f "./server.properties" ]]; then
+  if grep -q '^server-port=' ./server.properties; then
+    sed -i "s/^server-port=.*/server-port=${JAVA_PORT}/" ./server.properties
+  else
+    echo "server-port=${JAVA_PORT}" >> ./server.properties
+  fi
+else
+  echo "server-port=${JAVA_PORT}" > ./server.properties
+fi
+
+# -----------------------------------------------------------
+# Start (mit sauberem Shutdown bei SIGTERM)
+# -----------------------------------------------------------
+log_info "Starte Paper ${PAPER_VERSION}"
+log_info "Java-Port    (TCP): ${JAVA_PORT}"
+if [[ "${BEDROCK_SUPPORT}" == "true" ]]; then
+  log_info "Bedrock-Port (TCP+UDP): ${BEDROCK_PORT} (Geyser)"
+fi
+log_info "RAM               : Xms=${XMS_MB}M / Xmx=${XMX_MB}M"
+log_info "Datenverzeichnis  : ${DATA_DIR}"
+log_info "Server-Log        : ${DATA_DIR}/logs/latest.log"
+echo "-----------------------------------------------------------"
+
+# Eigene stdin-Pipe, damit wir dem Server "stop" schicken können
+STDIN_FIFO="${TMP_BASE}/mc_stdin"
+rm -f "${STDIN_FIFO}"
+mkfifo "${STDIN_FIFO}"
+exec 3<>"${STDIN_FIFO}"
+
+STOPPING=0
+JAVA_PID=""
+
+# Wird über trap aufgerufen (shellcheck erkennt das nicht). Die Trap steht vor dem
+# Java-Start, damit ein frühes SIGTERM nicht verloren geht.
+# shellcheck disable=SC2329
+graceful_stop() {
+  STOPPING=1
+  log_info "Stop-Signal empfangen, beende Server sauber (Welt wird gespeichert)"
+  echo "stop" >&3 || true
+  wait "${JAVA_PID}" 2>/dev/null || true
+}
+trap graceful_stop TERM INT
+
+java -Xms"${XMS_MB}M" -Xmx"${XMX_MB}M" -jar "${PAPER_JAR}" nogui <&3 &
+JAVA_PID=$!
+
+set +e
+wait "${JAVA_PID}"
+RC=$?
+set -e
+
+if (( STOPPING == 1 )); then
+  log_info "Server gestoppt"
+  exit 0
+fi
+
+log_warn "Server wurde beendet (Exit-Code ${RC})"
+exit "${RC}"
