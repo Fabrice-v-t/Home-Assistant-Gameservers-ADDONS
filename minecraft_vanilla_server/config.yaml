@@ -2,19 +2,21 @@ name: "Minecraft Vanilla Dedicated Server"
 slug: minecraft_vanilla_server
 description: >
   Minecraft Vanilla Dedicated Server for Home Assistant OS.
-  Automatically installs Java, accepts the Minecraft EULA,
-  downloads the selected server version and stores all data
-  persistently in /share.
-version: "0.0.2"
+  Installs the Java version required by the selected Minecraft version,
+  downloads and verifies the server JAR and stores all data persistently
+  in /share. The Minecraft EULA must be accepted explicitly in the
+  add-on configuration.
+version: "0.0.3"
 
 arch:
   - amd64
   - aarch64
 
-startup: application
-boot: auto
 init: false
-host_network: false
+# Kein Host-Netzwerk (HA-Standard): nur die unten gelisteten Ports werden veröffentlicht
+
+# Zeit zum sauberen Speichern der Welt beim Stoppen (Standard sind 10 s)
+timeout: 60
 
 # Container läuft IMMER auf 25565
 # Der Host-Port kann im HA UI geändert werden
@@ -29,6 +31,9 @@ map:
 options:
   data_dir: "/share/minecraft-vanilla"
 
+  # Muss auf true gesetzt werden: https://aka.ms/MinecraftEULA
+  accept_eula: false
+
   # RAM (MB)
   xms_mb: 1024
   xmx_mb: 4096
@@ -36,12 +41,15 @@ options:
   # "latest" oder z.B. "1.21.1"
   mc_version: "latest"
 
-  # Optional: feste Server-JAR URL (überschreibt mc_version)
+  # Optional: feste Server-JAR URL (überschreibt mc_version, nur https)
   server_jar_url: ""
 
 schema:
   data_dir: str
+  accept_eula: bool
   xms_mb: int
   xmx_mb: int
   mc_version: str
   server_jar_url: str?
+  # Optional: Java-Version erzwingen (sonst aus den Mojang-Metadaten)
+  java_major: int(8,99)?
