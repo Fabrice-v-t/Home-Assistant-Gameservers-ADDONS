@@ -77,6 +77,33 @@ options:
   # Xms = Xmx und Heap sofort belegen
   fixed_heap: false
 
+  # Spielwelt: 0 bzw. -1 lässt den Wert in server.properties unverändert und überschreibt das Leistungsprofil sonst
+  view_distance: 0
+  simulation_distance: 0
+  max_players: 0
+  entity_broadcast_range: 0
+
+  # Spielerlebnis: "default" lässt den Wert in server.properties unverändert
+  difficulty: "default"
+  gamemode: "default"
+  force_gamemode: "default"
+  hardcore: "default"
+  pvp: "default"
+  allow_flight: "default"
+  allow_nether: "default"
+  spawn_monsters: "default"
+  spawn_animals: "default"
+  spawn_npcs: "default"
+  generate_structures: "default"
+  command_blocks: "default"
+  spawn_protection: -1
+  motd: ""
+  # Gilt nur beim Erzeugen einer neuen Welt
+  level_seed: ""
+
+  # Spielregeln als name=wert, z. B. keep_inventory=true (siehe README)
+  game_rules: []
+
 schema:
   data_dir: str
   accept_eula: bool
@@ -102,3 +129,24 @@ schema:
   cpu_cores: int(0,64)
   memory_guard: bool
   fixed_heap: bool
+  view_distance: int(0,32)
+  simulation_distance: int(0,32)
+  max_players: int(0,10000)
+  entity_broadcast_range: int(0,500)
+  difficulty: list(default|peaceful|easy|normal|hard)
+  gamemode: list(default|survival|creative|adventure|spectator)
+  force_gamemode: list(default|true|false)
+  hardcore: list(default|true|false)
+  pvp: list(default|true|false)
+  allow_flight: list(default|true|false)
+  allow_nether: list(default|true|false)
+  spawn_monsters: list(default|true|false)
+  spawn_animals: list(default|true|false)
+  spawn_npcs: list(default|true|false)
+  generate_structures: list(default|true|false)
+  command_blocks: list(default|true|false)
+  spawn_protection: int(-1,1000)
+  motd: str?
+  level_seed: str?
+  game_rules:
+    - match(^[A-Za-z0-9_:]{1,64}=(true|false|-?[0-9]{1,9})$)

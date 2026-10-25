@@ -98,6 +98,10 @@ https://github.com/cyclemat/Home-Assistant-Gameservers-ADDONS
 | `cpu_cores` | Number of CPU cores, `0` = all |
 | `memory_guard` | Limit `xmx_mb` so RAM stays free for the system |
 | `fixed_heap` | `xms_mb` = `xmx_mb`, claim the memory at startup |
+| `view_distance`, `simulation_distance`, `max_players`, `entity_broadcast_range` | Free world performance settings, 0 = unchanged |
+| `difficulty`, `gamemode`, `pvp`, `allow_flight`, ... | Gameplay settings, `default` = unchanged (see below) |
+| `motd`, `level_seed`, `spawn_protection` | Server message, seed for a new world, spawn protection radius |
+| `game_rules` | Game rules as `name=value` |
 
 > ℹ️ The Minecraft server always runs on port **25565 inside the container**.  
 > The external port can be changed in the Home Assistant add-on network settings.
@@ -151,6 +155,36 @@ Home Assistant cannot set CPU or memory limits per add-on, so the add-on applies
 
 The add-on always starts Java with the G1 garbage collector. Without it Java silently falls back to the slow
 SerialGC on machines with fewer than 2 CPUs or less than 1.75 GB RAM.
+
+---
+
+## 🎲 World and gameplay settings
+
+These options change the matching entries in `server.properties` on every start. They only touch an entry when you
+set it: `default` (or `0` / `-1` for numbers and an empty text) leaves the current value alone, so your own edits
+in `server.properties` stay.
+
+| Option | Values | Notes |
+|---|---|---|
+| `view_distance`, `simulation_distance` | 0, or 2 to 32 | Override the performance profile when set |
+| `max_players` | 0, or 1 and up | Overrides the performance profile when set |
+| `entity_broadcast_range` | 0, or 10 to 500 (%) | Lower values save CPU and bandwidth |
+| `difficulty` | `default`, `peaceful`, `easy`, `normal`, `hard` | |
+| `gamemode`, `force_gamemode` | `survival`, `creative`, `adventure`, `spectator` / `true`, `false` | The game mode applies to players who join for the first time, with `force_gamemode` to everyone |
+| `hardcore` | `true`, `false` | Only for a newly created world |
+| `pvp`, `allow_flight`, `allow_nether`, `command_blocks` | `true`, `false` | |
+| `spawn_monsters`, `spawn_animals`, `spawn_npcs` | `true`, `false` | |
+| `generate_structures` | `true`, `false` | Only for newly generated chunks |
+| `spawn_protection` | -1, or 0 to 1000 (blocks) | |
+| `motd` | text | Shown in the server list, no line breaks or backslashes |
+| `level_seed` | text | Only used when a new world is created |
+| `game_rules` | list of `name=value` | See below |
+
+**Game rules.** Add one entry per rule, for example `keep_inventory=true` or `random_tick_speed=3`. The rules are set on
+every start once the server is ready. Since Minecraft 1.21.11 the rules are written in snake_case (`keep_inventory`),
+before that in camelCase (`keepInventory`). Either spelling works: the add-on converts it to the one your server version
+uses. Rules that were renamed beyond the spelling (for example `doDaylightCycle`, now `advance_time`) need the new name.
+Game rules are stored in the world, so deleting an entry does not reset the rule. Set it to the value you want instead.
 
 ---
 

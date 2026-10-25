@@ -56,6 +56,66 @@ configuration:
   fixed_heap:
     name: Fester Heap
     description: Setzt den minimalen RAM gleich dem maximalen RAM und belegt den Speicher beim Start. Das vermeidet Größenänderungen im Betrieb (von Paper empfohlen). Der Start dauert etwas länger.
+  view_distance:
+    name: Sichtweite (Chunks)
+    description: "0 behält den Wert aus server.properties (oder dem Leistungsprofil). Sonst 2 bis 32. Wirkt auf RAM und Netzwerklast."
+  simulation_distance:
+    name: Simulationsweite (Chunks)
+    description: "0 behält den Wert aus server.properties (oder dem Leistungsprofil). Sonst 2 bis 32. Der größte Hebel für die CPU-Last."
+  max_players:
+    name: Maximale Spielerzahl
+    description: "0 behält den Wert aus server.properties (oder dem Leistungsprofil)."
+  entity_broadcast_range:
+    name: Sichtbarkeit von Entitäten (%)
+    description: "0 behält den Standard (100). Kleinere Werte (10 bis 500) zeigen Mobs und Items nur auf kürzere Entfernung und sparen CPU und Bandbreite."
+  difficulty:
+    name: Schwierigkeitsgrad
+    description: "default behält die aktuelle Einstellung. Sonst peaceful, easy, normal oder hard. Wird bei jedem Start gesetzt."
+  gamemode:
+    name: Standard-Spielmodus
+    description: "default behält die aktuelle Einstellung. Sonst survival, creative, adventure oder spectator. Gilt für neu beitretende Spieler oder für alle mit Spielmodus erzwingen."
+  force_gamemode:
+    name: Spielmodus erzwingen
+    description: "true setzt bei jedem Beitritt den Standard-Spielmodus für jeden Spieler. default behält die aktuelle Einstellung."
+  hardcore:
+    name: Hardcore
+    description: "Wirkt nur bei einer neu erzeugten Welt. default behält die aktuelle Einstellung."
+  pvp:
+    name: Spieler gegen Spieler
+    description: "false verhindert, dass Spieler sich gegenseitig Schaden zufügen. default behält die aktuelle Einstellung."
+  allow_flight:
+    name: Fliegen erlauben
+    description: "true verhindert, dass der Server Spieler fürs Fliegen kickt (nötig für manche Mods und Plugins). default behält die aktuelle Einstellung."
+  allow_nether:
+    name: Nether erlauben
+    description: "false deaktiviert Reisen in den Nether. default behält die aktuelle Einstellung."
+  spawn_monsters:
+    name: Monster spawnen
+    description: "false deaktiviert feindliche Mobs. default behält die aktuelle Einstellung."
+  spawn_animals:
+    name: Tiere spawnen
+    description: "false deaktiviert friedliche Tiere. default behält die aktuelle Einstellung."
+  spawn_npcs:
+    name: Dorfbewohner spawnen
+    description: "false deaktiviert Dorfbewohner. default behält die aktuelle Einstellung."
+  generate_structures:
+    name: Strukturen generieren
+    description: "Dörfer, Tempel und so weiter. Wirkt nur bei neu generierten Chunks. default behält die aktuelle Einstellung."
+  command_blocks:
+    name: Befehlsblöcke aktivieren
+    description: "true erlaubt Befehlsblöcke. default behält die aktuelle Einstellung."
+  spawn_protection:
+    name: Spawn-Schutz (Blöcke)
+    description: "Radius um den Spawn-Punkt, den nur Operatoren verändern dürfen. -1 behält den Wert aus server.properties, 0 schaltet ihn aus."
+  motd:
+    name: Servernachricht (MOTD)
+    description: "Text in der Serverliste. Leer behält den aktuellen Text. Keine Zeilenumbrüche oder Backslashes."
+  level_seed:
+    name: Welt-Seed
+    description: "Wird nur beim Erzeugen einer neuen Welt verwendet. Leer behält die aktuelle Einstellung."
+  game_rules:
+    name: Spielregeln
+    description: "Ein Eintrag pro Regel als name=wert, zum Beispiel keep_inventory=true oder random_tick_speed=3. Wird bei jedem Start gesetzt, sobald der Server bereit ist. Beide Schreibweisen (keep_inventory und keepInventory) funktionieren und werden auf die Schreibweise deiner Minecraft-Version umgestellt. Ein entfernter Eintrag setzt die Regel nicht zurück."
 network:
   25565/tcp: Minecraft Java Edition (TCP)
   19132/tcp: Minecraft Bedrock Edition über Geyser, Signaling (TCP)

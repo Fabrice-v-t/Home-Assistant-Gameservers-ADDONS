@@ -47,6 +47,11 @@ assert_out_lacks() {
 assert_file()    { if [[ -e "${DATA}/$1" ]]; then ok "Datei vorhanden: $1"; else nok "Datei fehlt: $1"; fi; }
 assert_no_file() { if [[ -e "${DATA}/$1" ]]; then nok "Datei unerwartet vorhanden: $1"; else ok "Datei nicht vorhanden: $1"; fi; }
 
+# assert_file_lacks <Datei> <fester Text>
+assert_file_lacks() {
+  if grep -qF -- "$2" "${DATA}/$1" 2>/dev/null; then nok "$1 enthält unerwartet: $2"; else ok "$1 enthält nicht: $2"; fi
+}
+
 # assert_file_has <Datei> <fester Text>
 assert_file_has() {
   if grep -qF -- "$2" "${DATA}/$1" 2>/dev/null; then ok "$1 enthält: $2"; else nok "$1 enthält nicht: $2"; fi
@@ -346,6 +351,7 @@ paper_fixture_default() {
   paper_add "26.3" 25 "STABLE,STABLE,BETA"
   paper_add "26.3-rc-3" 25 "ALPHA"
   paper_add "1.21.11" 21 "STABLE,STABLE"
+  paper_add "1.21.10" 21 "STABLE"
   paper_finish
 }
 

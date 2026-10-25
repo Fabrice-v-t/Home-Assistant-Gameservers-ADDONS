@@ -605,6 +605,119 @@ t_leistungsprofil() {
   assert_file_has "server.properties" "view-distance=14"
 }
 
+t_spielwelt_ueberschreibt_profil() {
+  paper_sandbox "Spielwelt: eigene Werte überschreiben das Leistungsprofil"
+  set_options '{"performance_profile": "balanced", "view_distance": 12, "max_players": 5, "entity_broadcast_range": 50}'
+  run_addon
+  assert_rc 0
+  assert_file_has "server.properties" "view-distance=12"
+  assert_file_has "server.properties" "simulation-distance=6"
+  assert_file_has "server.properties" "max-players=5"
+  assert_file_has "server.properties" "entity-broadcast-range-percentage=50"
+
+  # Ungültige Werte werden ignoriert, das Profil bleibt
+  set_options '{"performance_profile": "low", "view_distance": 1, "simulation_distance": 99}'
+  run_addon
+  assert_file_has "server.properties" "view-distance=6"
+  assert_file_has "server.properties" "simulation-distance=4"
+  assert_out_has "Ungültiger Wert für view_distance: '1'"
+  assert_out_has "Ungültiger Wert für simulation_distance: '99'"
+}
+
+t_spielerlebnis() {
+  paper_sandbox "Spielerlebnis: Schwierigkeit, Spielmodus und Schalter in server.properties"
+  mkdir -p "${DATA}"
+  printf 'difficulty=easy\npvp=true\nallow-nether=true\nlevel-name=meine welt\n' > "${DATA}/server.properties"
+  set_options '{"difficulty": "hard", "gamemode": "creative", "force_gamemode": "true", "hardcore": "true", "allow_flight": "true", "command_blocks": "true", "spawn_protection": 0, "spawn_monsters": "false", "generate_structures": "false", "spawn_animals": "false", "spawn_npcs": "false"}'
+  run_addon
+  assert_rc 0
+  assert_file_has "server.properties" "difficulty=hard"
+  assert_file_has "server.properties" "gamemode=creative"
+  assert_file_has "server.properties" "force-gamemode=true"
+  assert_file_has "server.properties" "hardcore=true"
+  assert_file_has "server.properties" "allow-flight=true"
+  assert_file_has "server.properties" "enable-command-block=true"
+  assert_file_has "server.properties" "spawn-protection=0"
+  assert_file_has "server.properties" "spawn-monsters=false"
+  assert_file_has "server.properties" "generate-structures=false"
+  assert_file_has "server.properties" "spawn-animals=false"
+  assert_file_has "server.properties" "spawn-npcs=false"
+  # Nicht gesetzte Optionen ("default") lassen vorhandene Einträge unangetastet
+  assert_file_has "server.properties" "pvp=true"
+  assert_file_has "server.properties" "allow-nether=true"
+  assert_file_has "server.properties" "level-name=meine welt"
+  assert_file_lacks "server.properties" "difficulty=easy"
+  # Genau ein Eintrag pro Schlüssel
+  assert_eq "difficulty steht genau einmal in der Datei" "1" "$(grep -c '^difficulty=' "${DATA}/server.properties")"
+
+  set_options '{"pvp": "false", "allow_nether": "false"}'
+  run_addon
+  assert_file_has "server.properties" "pvp=false"
+  assert_file_has "server.properties" "allow-nether=false"
+  assert_file_has "server.properties" "difficulty=hard"
+}
+
+t_spielerlebnis_ungueltig() {
+  paper_sandbox "Spielerlebnis: ungültige Werte werden ignoriert"
+  mkdir -p "${DATA}"
+  printf 'difficulty=easy\nspawn-protection=16\n' > "${DATA}/server.properties"
+  set_options '{"difficulty": "impossible", "gamemode": "god", "pvp": "maybe", "spawn_protection": 5000}'
+  run_addon
+  assert_rc 0
+  assert_file_has "server.properties" "difficulty=easy"
+  assert_file_has "server.properties" "spawn-protection=16"
+  assert_out_has "Ungültiger Wert für difficulty: 'impossible'"
+  assert_out_has "Ungültiger Wert für gamemode: 'god'"
+  assert_out_has "Ungültiger Wert für pvp: 'maybe'"
+  assert_out_has "Ungültiger Wert für spawn_protection: '5000'"
+}
+
+t_motd_und_seed() {
+  paper_sandbox "Spielerlebnis: MOTD mit Sonderzeichen und Seed"
+  set_options '{"motd": "Willkommen / bei A&B | Server", "level_seed": "-4172144997902289642"}'
+  run_addon
+  assert_rc 0
+  assert_file_has "server.properties" "motd=Willkommen / bei A&B | Server"
+  assert_file_has "server.properties" "level-seed=-4172144997902289642"
+
+  set_options '{"motd": "mit \\u00a7 Backslash"}'
+  run_addon
+  assert_file_has "server.properties" "motd=Willkommen / bei A&B | Server"
+  assert_out_has "Ungültiger Wert für motd"
+}
+
+t_spielregeln_neue_schreibweise() {
+  paper_sandbox "Spielregeln: neue Namen (snake_case) und Umrechnung"
+  set_options '{"game_rules": ["keepInventory=true", "random_tick_speed=3", "minecraft:doMobLoot=false", "bad rule", "x=maybe", "advance_time=false"]}'
+  run_lists_scenario 4
+  assert_rc 0
+  assert_cmd "gamerule keep_inventory true"
+  assert_cmd "gamerule random_tick_speed 3"
+  assert_cmd "gamerule do_mob_loot false"
+  assert_cmd "gamerule advance_time false"
+  assert_no_cmd "gamerule keepInventory true"
+  assert_out_has "Ungültige Spielregel ignoriert (erwartet name=wert): bad rule"
+  assert_out_has "Ungültige Spielregel ignoriert (erwartet name=wert): x=maybe"
+  assert_out_has "Setze 4 Spielregeln"
+}
+
+t_spielregeln_alte_schreibweise() {
+  paper_sandbox "Spielregeln: alte Namen (camelCase) bis 1.21.10"
+  set_options '{"mc_version": "1.21.10", "game_rules": ["keep_inventory=true", "randomTickSpeed=3"]}'
+  run_lists_scenario 2
+  assert_rc 0
+  assert_cmd "gamerule keepInventory true"
+  assert_cmd "gamerule randomTickSpeed 3"
+  assert_no_cmd "gamerule keep_inventory true"
+}
+
+t_spielregeln_keine() {
+  paper_sandbox "Spielregeln: ohne Einträge wird nichts gesendet"
+  run_lists_scenario 0
+  assert_rc 0
+  assert_out_lacks "Spielregeln"
+}
+
 t_server_exitcode_wird_durchgereicht() {
   paper_sandbox "Abstürzender Server: Exit-Code wird durchgereicht"
   export MOCK_JAVA_EXIT_CODE=3
@@ -635,7 +748,7 @@ for t in t_eula_fehlt t_xms_groesser_xmx t_normalstart t_rc_und_vorversionen_wer
          t_geyser_config_bei_bedrock_support_false \
          t_spielerlisten_befehle t_spielerlisten_abgleich t_spielerlisten_ungueltige_namen \
          t_spielerlisten_bedrock t_spielerlisten_bedrock_aus t_spielerlisten_leer \
-         t_server_exitcode_wird_durchgereicht t_ungueltige_version t_cpu_prioritaet t_cpu_kerne t_ram_schutz t_ram_schutz_container_limit t_ram_schutz_ohne_meminfo t_fester_heap t_leistungsprofil; do
+         t_server_exitcode_wird_durchgereicht t_ungueltige_version t_cpu_prioritaet t_cpu_kerne t_ram_schutz t_ram_schutz_container_limit t_ram_schutz_ohne_meminfo t_fester_heap t_leistungsprofil t_spielwelt_ueberschreibt_profil t_spielerlebnis t_spielerlebnis_ungueltig t_motd_und_seed t_spielregeln_neue_schreibweise t_spielregeln_alte_schreibweise t_spielregeln_keine; do
   "${t}"
 done
 

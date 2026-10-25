@@ -54,6 +54,25 @@ MEMORY_GUARD="$(opt memory_guard)";             : "${MEMORY_GUARD:=true}"
 FIXED_HEAP="$(opt fixed_heap)";                 : "${FIXED_HEAP:=false}"
 [[ "${MEMORY_GUARD}" == "false" ]] || MEMORY_GUARD="true"
 [[ "${FIXED_HEAP}" == "true" ]] || FIXED_HEAP="false"
+VIEW_DISTANCE="$(opt view_distance)";             : "${VIEW_DISTANCE:=0}"
+SIMULATION_DISTANCE="$(opt simulation_distance)"; : "${SIMULATION_DISTANCE:=0}"
+MAX_PLAYERS="$(opt max_players)";                 : "${MAX_PLAYERS:=0}"
+ENTITY_RANGE="$(opt entity_broadcast_range)";     : "${ENTITY_RANGE:=0}"
+SPAWN_PROTECTION="$(opt spawn_protection)";       : "${SPAWN_PROTECTION:=-1}"
+DIFFICULTY="$(opt difficulty)";                   : "${DIFFICULTY:=default}"
+GAMEMODE="$(opt gamemode)";                       : "${GAMEMODE:=default}"
+FORCE_GAMEMODE="$(opt force_gamemode)";           : "${FORCE_GAMEMODE:=default}"
+HARDCORE="$(opt hardcore)";                       : "${HARDCORE:=default}"
+PVP="$(opt pvp)";                                 : "${PVP:=default}"
+ALLOW_FLIGHT="$(opt allow_flight)";               : "${ALLOW_FLIGHT:=default}"
+ALLOW_NETHER="$(opt allow_nether)";               : "${ALLOW_NETHER:=default}"
+SPAWN_MONSTERS="$(opt spawn_monsters)";           : "${SPAWN_MONSTERS:=default}"
+SPAWN_ANIMALS="$(opt spawn_animals)";             : "${SPAWN_ANIMALS:=default}"
+SPAWN_NPCS="$(opt spawn_npcs)";                   : "${SPAWN_NPCS:=default}"
+GENERATE_STRUCTURES="$(opt generate_structures)"; : "${GENERATE_STRUCTURES:=default}"
+COMMAND_BLOCKS="$(opt command_blocks)";           : "${COMMAND_BLOCKS:=default}"
+MOTD="$(opt motd)"
+LEVEL_SEED="$(opt level_seed)"
 mapfile -t EXTRA_URLS < <(jq -r '.plugin_urls // [] | .[]' "${OPTIONS_FILE}")
 
 # -----------------------------------------------------------
@@ -380,11 +399,11 @@ log_info "EULA gemäß Konfiguration akzeptiert"
 # set_property <Schlüssel> <Wert>: setzt oder ergänzt einen Eintrag
 set_property() {
   [[ -f ./server.properties ]] || : > ./server.properties
-  if grep -q "^$1=" ./server.properties; then
-    sed -i "s/^$1=.*/$1=$2/" ./server.properties
-  else
-    echo "$1=$2" >> ./server.properties
-  fi
+  K="$1" V="$2" awk 'BEGIN { k = ENVIRON["K"]; v = ENVIRON["V"] }
+    index($0, k "=") == 1 { print k "=" v; found = 1; next }
+    { print }
+    END { if (!found) print k "=" v }' ./server.properties > ./server.properties.new
+  mv ./server.properties.new ./server.properties
 }
 
 set_property server-port "${JAVA_PORT}"
@@ -522,6 +541,61 @@ apply_player_lists() {
 }
 
 # -----------------------------------------------------------
+# Spielregeln (game_rules)
+# -----------------------------------------------------------
+# Einträge der Form name=wert (true, false oder eine Zahl). Sie werden bei jedem Start per
+# "gamerule"-Befehl gesetzt, sobald der Server bereit ist. Spielregeln stehen danach in der
+# Welt: Ein gelöschter Eintrag setzt die Regel nicht zurück, dafür den Wert ausdrücklich ändern.
+# Ab Minecraft 1.21.11 heißen die Regeln in snake_case (keep_inventory), davor in camelCase
+# (keepInventory). Die Schreibweise wird zur Serverversion passend umgewandelt. Regeln, die
+# darüber hinaus umbenannt wurden (z. B. doDaylightCycle zu advance_time), muss man mit dem
+# neuen Namen angeben.
+GAME_VERSION="${PAPER_VERSION}"
+
+# gamerule_is_snake <Version>: 0 (wahr) für 1.21.11 und neuer sowie die Jahresversionen ab 26.x
+gamerule_is_snake() {
+  local v="${1%%-*}" a="" b="" c=""
+  IFS=. read -r a b c <<<"${v}"
+  [[ "${a}" =~ ^[0-9]+$ ]] || return 0
+  if (( a > 1 )); then return 0; fi
+  [[ "${b}" =~ ^[0-9]+$ ]] || return 0
+  if (( b > 21 )); then return 0; fi
+  if (( b == 21 )) && [[ "${c:-0}" =~ ^[0-9]+$ ]] && (( ${c:-0} >= 11 )); then return 0; fi
+  return 1
+}
+
+to_snake() { sed -E 's/([a-z0-9])([A-Z])/\1_\2/g' <<<"$1" | tr '[:upper:]' '[:lower:]'; }
+to_camel() { awk -F_ '{ out = $1; for (i = 2; i <= NF; i++) out = out toupper(substr($i, 1, 1)) substr($i, 2); print out }' <<<"$1"; }
+
+# game_rule_commands: gibt die gamerule-Befehle aus
+game_rule_commands() {
+  local entry name value snake=0
+  if gamerule_is_snake "${GAME_VERSION}"; then snake=1; fi
+  while IFS= read -r entry; do
+    if [[ -z "${entry}" ]]; then
+      continue
+    elif ! [[ "${entry}" =~ ^([A-Za-z0-9_:]{1,64})=(true|false|-?[0-9]{1,9})$ ]]; then
+      log_warn "Ungültige Spielregel ignoriert (erwartet name=wert): ${entry}" >&2
+      continue
+    fi
+    name="${BASH_REMATCH[1]#minecraft:}"
+    value="${BASH_REMATCH[2]}"
+    if (( snake == 1 )); then name="$(to_snake "${name}")"; else name="$(to_camel "${name}")"; fi
+    echo "gamerule ${name} ${value}"
+  done < <(list_opt game_rules)
+}
+
+# Schickt die Spielregeln an den Server (wie die Spielerlisten, nach dem Start)
+apply_game_rules() {
+  local cmds count
+  cmds="$(game_rule_commands)"
+  if [[ -z "${cmds}" ]]; then return 0; fi
+  count="$(wc -l <<<"${cmds}" | tr -d ' ')"
+  log_info "Setze ${count} Spielregeln, sobald der Server bereit ist"
+  send_player_commands "${cmds}" &
+}
+
+# -----------------------------------------------------------
 # Leistungsprofil (view-distance, simulation-distance, max-players)
 # -----------------------------------------------------------
 # Die simulation-distance ist der größte Hebel für die CPU-Last, die view-distance
@@ -543,6 +617,71 @@ if [[ -n "${PROFILE_VALUES}" ]]; then
   set_property max-players "${PROFILE_MAX}"
   log_info "Leistungsprofil ${PERFORMANCE_PROFILE}: view-distance=${PROFILE_VIEW}, simulation-distance=${PROFILE_SIM}, max-players=${PROFILE_MAX}"
 fi
+
+# -----------------------------------------------------------
+# Spielwelt und Spielerlebnis (server.properties)
+# -----------------------------------------------------------
+# Jede Option ändert nur ihren Eintrag in server.properties und nur, wenn sie gesetzt ist
+# ("default" bzw. 0 / -1 lässt den Eintrag unangetastet). Ausdrücklich gesetzte Weiten und
+# die Spielerzahl überschreiben das Leistungsprofil.
+
+# set_number <Schlüssel> <Option> <Wert> <Min> <Max> <Wert für "unverändert">
+set_number() {
+  local key="$1" label="$2" val="$3" min="$4" max="$5" skip="$6"
+  if [[ -z "${val}" || "${val}" == "${skip}" ]]; then return 0; fi
+  if ! [[ "${val}" =~ ^-?[0-9]+$ ]] || (( val < min || val > max )); then
+    log_warn "Ungültiger Wert für ${label}: '${val}' (erlaubt ${min} bis ${max}), ignoriert"
+    return 0
+  fi
+  set_property "${key}" "${val}"
+  log_info "${label}=${val}"
+}
+
+# set_choice <Schlüssel> <Option> <Wert> <erlaubte Werte, durch Leerzeichen getrennt>
+set_choice() {
+  local key="$1" label="$2" val="$3" allowed="$4"
+  if [[ -z "${val}" || "${val}" == "default" ]]; then return 0; fi
+  if [[ " ${allowed} " != *" ${val} "* ]]; then
+    log_warn "Ungültiger Wert für ${label}: '${val}' (erlaubt: ${allowed}), ignoriert"
+    return 0
+  fi
+  set_property "${key}" "${val}"
+  log_info "${label}=${val}"
+}
+
+# set_text <Schlüssel> <Option> <Wert>: Text ohne Zeilenumbrüche und Backslash
+set_text() {
+  local key="$1" label="$2" val="$3"
+  if [[ -z "${val}" ]]; then return 0; fi
+  if [[ "${val}" == *$'\n'* || "${val}" == *$'\r'* || "${val}" == *\\* ]]; then
+    log_warn "Ungültiger Wert für ${label}: Zeilenumbrüche und Backslash sind nicht erlaubt, ignoriert"
+    return 0
+  fi
+  set_property "${key}" "${val}"
+  log_info "${label} gesetzt"
+}
+
+set_number view-distance "view_distance" "${VIEW_DISTANCE}" 2 32 0
+set_number simulation-distance "simulation_distance" "${SIMULATION_DISTANCE}" 2 32 0
+set_number max-players "max_players" "${MAX_PLAYERS}" 1 10000 0
+set_number entity-broadcast-range-percentage "entity_broadcast_range" "${ENTITY_RANGE}" 10 500 0
+set_number spawn-protection "spawn_protection" "${SPAWN_PROTECTION}" 0 1000 -1
+
+set_choice difficulty "difficulty" "${DIFFICULTY}" "peaceful easy normal hard"
+set_choice gamemode "gamemode" "${GAMEMODE}" "survival creative adventure spectator"
+set_choice force-gamemode "force_gamemode" "${FORCE_GAMEMODE}" "true false"
+set_choice hardcore "hardcore" "${HARDCORE}" "true false"
+set_choice pvp "pvp" "${PVP}" "true false"
+set_choice allow-flight "allow_flight" "${ALLOW_FLIGHT}" "true false"
+set_choice allow-nether "allow_nether" "${ALLOW_NETHER}" "true false"
+set_choice spawn-monsters "spawn_monsters" "${SPAWN_MONSTERS}" "true false"
+set_choice spawn-animals "spawn_animals" "${SPAWN_ANIMALS}" "true false"
+set_choice spawn-npcs "spawn_npcs" "${SPAWN_NPCS}" "true false"
+set_choice generate-structures "generate_structures" "${GENERATE_STRUCTURES}" "true false"
+set_choice enable-command-block "command_blocks" "${COMMAND_BLOCKS}" "true false"
+
+set_text motd "motd" "${MOTD}"
+set_text level-seed "level_seed" "${LEVEL_SEED}"
 
 # -----------------------------------------------------------
 # Ressourcen: RAM-Schutz, CPU-Priorität und CPU-Kerne
@@ -679,6 +818,7 @@ touch "${PLAYER_MARKER}"
 JAVA_PID=$!
 
 apply_player_lists || log_warn "Spielerlisten konnten nicht abgeglichen werden"
+apply_game_rules || log_warn "Spielregeln konnten nicht gesetzt werden"
 
 set +e
 wait "${JAVA_PID}"

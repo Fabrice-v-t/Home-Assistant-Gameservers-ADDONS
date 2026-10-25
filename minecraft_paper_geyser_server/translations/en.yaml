@@ -56,6 +56,66 @@ configuration:
   fixed_heap:
     name: Fixed heap
     description: Sets the minimum RAM equal to the maximum RAM and claims the memory at startup. This avoids heap resizing while running (recommended by Paper). Starting takes a little longer.
+  view_distance:
+    name: View distance (chunks)
+    description: "0 keeps the value from server.properties (or the performance profile). Otherwise 2 to 32. Affects RAM and network load."
+  simulation_distance:
+    name: Simulation distance (chunks)
+    description: "0 keeps the value from server.properties (or the performance profile). Otherwise 2 to 32. The biggest lever for CPU load."
+  max_players:
+    name: Maximum players
+    description: "0 keeps the value from server.properties (or the performance profile)."
+  entity_broadcast_range:
+    name: Entity broadcast range (%)
+    description: "0 keeps the default (100). Lower values (10 to 500) make mobs and items visible only at a shorter distance and save CPU and bandwidth."
+  difficulty:
+    name: Difficulty
+    description: "default keeps the current setting. Otherwise peaceful, easy, normal or hard. Applied on every start."
+  gamemode:
+    name: Default game mode
+    description: "default keeps the current setting. Otherwise survival, creative, adventure or spectator. Applies to players who join for the first time, or to everyone with Force game mode."
+  force_gamemode:
+    name: Force game mode
+    description: "true sets the default game mode for every player on each join. default keeps the current setting."
+  hardcore:
+    name: Hardcore
+    description: "Only takes effect for a newly created world. default keeps the current setting."
+  pvp:
+    name: Player versus player
+    description: "false stops players from damaging each other. default keeps the current setting."
+  allow_flight:
+    name: Allow flight
+    description: "true stops the server from kicking players for flying (needed for some mods and plugins). default keeps the current setting."
+  allow_nether:
+    name: Allow the Nether
+    description: "false disables travel to the Nether. default keeps the current setting."
+  spawn_monsters:
+    name: Spawn monsters
+    description: "false disables hostile mobs. default keeps the current setting."
+  spawn_animals:
+    name: Spawn animals
+    description: "false disables passive animals. default keeps the current setting."
+  spawn_npcs:
+    name: Spawn villagers
+    description: "false disables villagers. default keeps the current setting."
+  generate_structures:
+    name: Generate structures
+    description: "Villages, temples and so on. Only applies to newly generated chunks. default keeps the current setting."
+  command_blocks:
+    name: Enable command blocks
+    description: "true allows command blocks. default keeps the current setting."
+  spawn_protection:
+    name: Spawn protection (blocks)
+    description: "Radius around the spawn point that only operators can change. -1 keeps the value from server.properties, 0 turns it off."
+  motd:
+    name: Server message (MOTD)
+    description: "Text shown in the server list. Empty keeps the current text. No line breaks or backslashes."
+  level_seed:
+    name: World seed
+    description: "Only used when a new world is created. Empty keeps the current setting."
+  game_rules:
+    name: Game rules
+    description: "One entry per rule as name=value, for example keep_inventory=true or random_tick_speed=3. Applied on every start once the server is ready. Both spellings (keep_inventory and keepInventory) work and are converted to the one your Minecraft version uses. Removing an entry does not reset the rule."
 network:
   25565/tcp: Minecraft Java Edition (TCP)
   19132/tcp: Minecraft Bedrock Edition via Geyser, signaling (TCP)
