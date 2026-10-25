@@ -87,6 +87,12 @@ sandbox() {
   export MOCK_JAVA_MODE="exit"
   export MOCK_JAVA_EXIT_CODE="0"
   export PLAYER_SYNC_DELAY="0.2"
+  # Feste Test-Umgebung für den RAM-Schutz: 16 GB RAM und kein Container-Limit
+  printf "MemTotal:       16777216 kB
+MemAvailable:   12582912 kB
+" > "${T}/meminfo"
+  export MEMINFO_FILE="${T}/meminfo"
+  export CGROUP_MEM_FILE="${T}/no-cgroup-limit"
   : > "${MOCK_CALLS}"
   : > "${MOCK_FAIL}"
   : > "${MOCK_JAVA_LOG}"

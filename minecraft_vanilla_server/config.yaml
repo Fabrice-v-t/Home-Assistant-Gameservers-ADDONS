@@ -51,6 +51,18 @@ options:
   ops: []
   banned_players: []
 
+  # Leistung
+  # custom = server.properties bleibt unangetastet, sonst low, balanced oder high
+  performance_profile: "custom"
+  # normal, low oder lowest: niedrigere Priorität schont Home Assistant
+  cpu_priority: "normal"
+  # Anzahl der CPU-Kerne für den Server, 0 = alle
+  cpu_cores: 0
+  # xmx_mb automatisch begrenzen, damit RAM für System und Home Assistant bleibt
+  memory_guard: true
+  # Xms = Xmx und Heap sofort belegen
+  fixed_heap: false
+
 schema:
   data_dir: str
   accept_eula: bool
@@ -67,3 +79,8 @@ schema:
     - match(^[A-Za-z0-9_]{1,16}$)
   banned_players:
     - match(^[A-Za-z0-9_]{1,16}$)
+  performance_profile: list(custom|low|balanced|high)
+  cpu_priority: list(normal|low|lowest)
+  cpu_cores: int(0,64)
+  memory_guard: bool
+  fixed_heap: bool

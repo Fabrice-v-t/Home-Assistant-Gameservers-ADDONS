@@ -28,6 +28,8 @@ non-https plugin URLs are ignored, the one-time Geyser configuration.
 Both add-ons: the whitelist, ban list and operator lists (commands sent to the server, sync of added and removed
 entries, invalid names, the whitelist switch). Paper additionally covers Bedrock names with a dot.
 
+Both add-ons: the performance options (G1 always set, `nice` priority, CPU core pinning and Java thread count, the memory guard with a fake `meminfo` and a container limit, fixed heap, performance profiles).
+
 ## How it works
 
 - `mocks/curl` serves files from a fake web root (`$MOCK_WWW`) and logs every request. Failures are injected

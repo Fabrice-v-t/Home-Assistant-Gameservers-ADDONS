@@ -19,7 +19,7 @@ if [[ "${1:-}" == "-version" ]]; then
   exit 0
 fi
 
-echo "major=${major} args=$*" >> "${MOCK_JAVA_LOG}"
+echo "major=${major} args=$* nice=$(nice 2>/dev/null) cpus=$(nproc 2>/dev/null)" >> "${MOCK_JAVA_LOG}"
 
 mkdir -p logs
 echo "[Server thread/INFO]: Starting minecraft server (mock java ${major})" | tee -a logs/latest.log

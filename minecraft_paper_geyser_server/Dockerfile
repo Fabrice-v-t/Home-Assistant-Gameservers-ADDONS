@@ -16,6 +16,7 @@ RUN apt-get update \
     grep \
     findutils \
     tar \
+    util-linux \
     gzip \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/*

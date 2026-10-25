@@ -38,6 +38,13 @@ SERVER_JAR_URL="$(opt server_jar_url)"
 JAVA_MAJOR_OPT="$(opt java_major)"
 WHITELIST_ENABLED="$(opt whitelist_enabled)"; : "${WHITELIST_ENABLED:=false}"
 [[ "${WHITELIST_ENABLED}" == "true" ]] || WHITELIST_ENABLED="false"
+PERFORMANCE_PROFILE="$(opt performance_profile)"; : "${PERFORMANCE_PROFILE:=custom}"
+CPU_PRIORITY="$(opt cpu_priority)";             : "${CPU_PRIORITY:=normal}"
+CPU_CORES="$(opt cpu_cores)";                   : "${CPU_CORES:=0}"
+MEMORY_GUARD="$(opt memory_guard)";             : "${MEMORY_GUARD:=true}"
+FIXED_HEAP="$(opt fixed_heap)";                 : "${FIXED_HEAP:=false}"
+[[ "${MEMORY_GUARD}" == "false" ]] || MEMORY_GUARD="true"
+[[ "${FIXED_HEAP}" == "true" ]] || FIXED_HEAP="false"
 
 # -----------------------------------------------------------
 # EULA: nur mit ausdrücklicher Zustimmung
@@ -65,6 +72,10 @@ if [[ -n "${JAVA_MAJOR_OPT}" && ! "${JAVA_MAJOR_OPT}" =~ ^[0-9]+$ ]]; then
 fi
 if ! [[ "${MC_VERSION}" =~ ^[A-Za-z0-9._-]+$ ]]; then
   log_error "Ungültige Minecraft-Version: '${MC_VERSION}'"
+  exit 1
+fi
+if ! [[ "${CPU_CORES}" =~ ^[0-9]+$ ]]; then
+  log_error "cpu_cores muss eine ganze Zahl sein (aktuell: '${CPU_CORES}')"
   exit 1
 fi
 if [[ -n "${SERVER_JAR_URL}" && "${SERVER_JAR_URL}" != https://* ]]; then
@@ -410,11 +421,131 @@ apply_player_lists() {
 }
 
 # -----------------------------------------------------------
+# Leistungsprofil (view-distance, simulation-distance, max-players)
+# -----------------------------------------------------------
+# Die simulation-distance ist der größte Hebel für die CPU-Last, die view-distance
+# für RAM und Netzwerk. "custom" lässt server.properties unangetastet.
+case "${PERFORMANCE_PROFILE}" in
+  low)      PROFILE_VALUES="6 4 10" ;;
+  balanced) PROFILE_VALUES="8 6 20" ;;
+  high)     PROFILE_VALUES="12 8 40" ;;
+  custom)   PROFILE_VALUES="" ;;
+  *)
+    log_warn "Unbekanntes Leistungsprofil '${PERFORMANCE_PROFILE}', nutze custom"
+    PROFILE_VALUES=""
+    ;;
+esac
+if [[ -n "${PROFILE_VALUES}" ]]; then
+  read -r PROFILE_VIEW PROFILE_SIM PROFILE_MAX <<<"${PROFILE_VALUES}"
+  set_property view-distance "${PROFILE_VIEW}"
+  set_property simulation-distance "${PROFILE_SIM}"
+  set_property max-players "${PROFILE_MAX}"
+  log_info "Leistungsprofil ${PERFORMANCE_PROFILE}: view-distance=${PROFILE_VIEW}, simulation-distance=${PROFILE_SIM}, max-players=${PROFILE_MAX}"
+fi
+
+# -----------------------------------------------------------
+# Ressourcen: RAM-Schutz, CPU-Priorität und CPU-Kerne
+# -----------------------------------------------------------
+# JVM_FLAGS: Java-Argumente, LAUNCH: Programme vor java (nice, taskset)
+# G1 wird immer ausdrücklich gewählt: Bei weniger als 2 CPUs oder weniger als
+# 1,75 GB RAM nimmt Java sonst stillschweigend den langsamen SerialGC.
+JVM_FLAGS=(-XX:+UseG1GC)
+LAUNCH=()
+
+MEMINFO_FILE="${MEMINFO_FILE:-/proc/meminfo}"
+CGROUP_MEM_FILES=("${CGROUP_MEM_FILE:-/sys/fs/cgroup/memory.max}" "/sys/fs/cgroup/memory/memory.limit_in_bytes")
+
+# total_memory_mb: Gesamt-RAM in MB, bei einem Container-Limit der kleinere Wert
+total_memory_mb() {
+  local kb mb limit f
+  kb="$(awk '/^MemTotal:/ {print $2}' "${MEMINFO_FILE}" 2>/dev/null || true)"
+  [[ "${kb}" =~ ^[0-9]+$ ]] || return 1
+  mb=$(( kb / 1024 ))
+  for f in "${CGROUP_MEM_FILES[@]}"; do
+    limit="$(cat "${f}" 2>/dev/null || true)"
+    if [[ "${limit}" =~ ^[0-9]+$ ]] && (( limit / 1048576 < mb )); then
+      mb=$(( limit / 1048576 ))
+    fi
+  done
+  echo "${mb}"
+}
+
+# RAM-Schutz: Java braucht über den Heap hinaus noch Speicher, und Home Assistant und
+# andere Add-ons brauchen ihren Teil. Es bleibt mindestens ein Viertel, aber nicht
+# weniger als 1536 MB frei. Sonst beendet Linux bei Speichermangel zuerst das Add-on.
+if [[ "${MEMORY_GUARD}" == "true" ]]; then
+  if TOTAL_MB="$(total_memory_mb)"; then
+    RESERVE_MB=$(( TOTAL_MB / 4 ))
+    if (( RESERVE_MB < 1536 )); then RESERVE_MB=1536; fi
+    MAX_HEAP_MB=$(( TOTAL_MB - RESERVE_MB ))
+    if (( MAX_HEAP_MB < 512 )); then MAX_HEAP_MB=512; fi
+    if (( XMX_MB > MAX_HEAP_MB )); then
+      log_warn "xmx_mb (${XMX_MB}) ist zu hoch für ${TOTAL_MB} MB RAM, begrenze auf ${MAX_HEAP_MB} MB (${RESERVE_MB} MB bleiben für System und Home Assistant frei)"
+      XMX_MB="${MAX_HEAP_MB}"
+    fi
+    if (( XMS_MB > XMX_MB )); then XMS_MB="${XMX_MB}"; fi
+  else
+    log_warn "Gesamt-RAM nicht ermittelbar, RAM-Schutz übersprungen"
+  fi
+fi
+
+# Fester Heap: Xms = Xmx und den Speicher gleich beim Start belegen. Das verhindert
+# Heap-Größenänderungen im Betrieb (Paper empfiehlt es), der Start dauert etwas länger.
+if [[ "${FIXED_HEAP}" == "true" ]]; then
+  XMS_MB="${XMX_MB}"
+  JVM_FLAGS+=(-XX:+AlwaysPreTouch)
+fi
+
+# CPU-Priorität: Der Server weicht Home Assistant aus, wenn die CPU knapp ist
+case "${CPU_PRIORITY}" in
+  normal) ;;
+  low)    LAUNCH+=(nice -n 10) ;;
+  lowest) LAUNCH+=(nice -n 19) ;;
+  *)      log_warn "Unbekannte CPU-Priorität '${CPU_PRIORITY}', nutze normal" ;;
+esac
+
+# expand_cpu_list <Liste>: "0-3,6" wird zu einer Kernnummer pro Zeile
+expand_cpu_list() {
+  local part
+  local -a parts=()
+  IFS=',' read -r -a parts <<<"$1"
+  for part in "${parts[@]}"; do
+    if [[ "${part}" =~ ^([0-9]+)-([0-9]+)$ ]]; then
+      seq "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
+    elif [[ "${part}" =~ ^[0-9]+$ ]]; then
+      echo "${part}"
+    fi
+  done
+}
+
+# CPU-Kerne: Der Server läuft nur auf den letzten N erlaubten Kernen. Kern 0 und die
+# vorderen Kerne bleiben für das System und Home Assistant frei. Java passt seine
+# Threads (GC, JIT) an die Kernzahl an.
+if (( CPU_CORES > 0 )); then
+  if ! command -v taskset >/dev/null 2>&1; then
+    log_warn "taskset nicht gefunden, cpu_cores wird ignoriert"
+  else
+    ALLOWED_LIST="$(taskset -cp $$ 2>/dev/null | sed 's/.*: //')"
+    mapfile -t ALLOWED_CPUS < <(expand_cpu_list "${ALLOWED_LIST}")
+    if (( ${#ALLOWED_CPUS[@]} == 0 )); then
+      log_warn "Erlaubte CPU-Kerne nicht ermittelbar, cpu_cores wird ignoriert"
+    elif (( CPU_CORES >= ${#ALLOWED_CPUS[@]} )); then
+      log_info "cpu_cores=${CPU_CORES}, verfügbar sind ${#ALLOWED_CPUS[@]} Kerne: keine Einschränkung nötig"
+    else
+      PINNED="$(printf '%s\n' "${ALLOWED_CPUS[@]: -CPU_CORES}" | paste -sd, -)"
+      LAUNCH+=(taskset -c "${PINNED}")
+      JVM_FLAGS+=("-XX:ActiveProcessorCount=${CPU_CORES}")
+    fi
+  fi
+fi
+
+# -----------------------------------------------------------
 # Start (mit sauberem Shutdown bei SIGTERM)
 # -----------------------------------------------------------
 log_info "Starte Minecraft Vanilla Server"
 log_info "Port (Container)  : ${CONTAINER_PORT}"
 log_info "RAM               : Xms=${XMS_MB}M / Xmx=${XMX_MB}M"
+log_info "CPU               : Priorität=${CPU_PRIORITY}, cpu_cores=${CPU_CORES} (0 = alle)"
 log_info "Datenverzeichnis  : ${DATA_DIR}"
 log_info "Server-Log        : ${DATA_DIR}/logs/latest.log"
 echo "-----------------------------------------------------------"
@@ -440,7 +571,7 @@ graceful_stop() {
 trap graceful_stop TERM INT
 
 touch "${PLAYER_MARKER}"
-java -Xms"${XMS_MB}M" -Xmx"${XMX_MB}M" -jar "${SERVER_JAR}" nogui <&3 &
+"${LAUNCH[@]}" java -Xms"${XMS_MB}M" -Xmx"${XMX_MB}M" "${JVM_FLAGS[@]}" -jar "${SERVER_JAR}" nogui <&3 &
 JAVA_PID=$!
 
 apply_player_lists || log_warn "Spielerlisten konnten nicht abgeglichen werden"

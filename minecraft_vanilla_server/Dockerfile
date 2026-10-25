@@ -14,6 +14,7 @@ RUN apt-get update \
     grep \
     findutils \
     tar \
+    util-linux \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/*
 

@@ -83,6 +83,11 @@ version). If Floodgate could not be downloaded, the file is not created and Geys
 | `whitelist` | Player names on the whitelist (Bedrock players with a leading dot) |
 | `ops` | Player names with operator rights |
 | `banned_players` | Player names on the ban list |
+| `performance_profile` | `custom`, `low`, `balanced` or `high` (view and simulation distance, max players) |
+| `cpu_priority` | `normal`, `low` or `lowest` |
+| `cpu_cores` | Number of CPU cores, `0` = all |
+| `memory_guard` | Limit `xmx_mb` so RAM stays free for the system |
+| `fixed_heap` | `xms_mb` = `xmx_mb`, claim the memory at startup |
 
 ## Whitelist, ban list and operators
 
@@ -101,6 +106,21 @@ so Java names must belong to real Minecraft accounts.
   every player. If it does not find a player, enter the XUID instead of the gamertag (`.2535400000000000`).
   Operators and bans for Bedrock players only work after the player has joined once, because the server
   has to know the player first.
+
+## Performance and resource limits
+
+Home Assistant cannot set CPU or memory limits per add-on, so the add-on applies them itself:
+
+| Option | What it does |
+|---|---|
+| `performance_profile` | `custom` leaves `server.properties` alone. `low` (view distance 6, simulation distance 4, 10 players), `balanced` (8, 6, 20) and `high` (12, 8, 40) set `view-distance`, `simulation-distance` and `max-players` on every start. The simulation distance has the biggest effect on CPU load. |
+| `cpu_priority` | `normal`, `low` (nice 10) or `lowest` (nice 19). With a lower priority the server gives way to Home Assistant when the CPU is busy. |
+| `cpu_cores` | Number of CPU cores the server may use, `0` means all. The server runs on the last cores, so the first ones stay free for the system and Home Assistant. Java adjusts its GC and JIT threads to the core count. |
+| `memory_guard` | Limits `xmx_mb` automatically so that at least a quarter of the system RAM (and at least 1536 MB) stays free. A container memory limit is taken into account. Without it Linux ends the add-on first when memory runs out. |
+| `fixed_heap` | Sets `xms_mb` equal to `xmx_mb` and claims the memory at startup. This avoids heap resizing while running, as Paper recommends. Starting takes a little longer. |
+
+The add-on always starts Java with the G1 garbage collector. Without it Java silently falls back to the slow
+SerialGC on machines with fewer than 2 CPUs or less than 1.75 GB RAM.
 
 ## Notes
 

@@ -93,6 +93,11 @@ https://github.com/cyclemat/Home-Assistant-Gameservers-ADDONS
 | `whitelist` | Player names on the whitelist |
 | `ops` | Player names with operator rights |
 | `banned_players` | Player names on the ban list |
+| `performance_profile` | `custom`, `low`, `balanced` or `high` (view and simulation distance, max players) |
+| `cpu_priority` | `normal`, `low` or `lowest` |
+| `cpu_cores` | Number of CPU cores, `0` = all |
+| `memory_guard` | Limit `xmx_mb` so RAM stays free for the system |
+| `fixed_heap` | `xms_mb` = `xmx_mb`, claim the memory at startup |
 
 > ℹ️ The Minecraft server always runs on port **25565 inside the container**.  
 > The external port can be changed in the Home Assistant add-on network settings.
@@ -129,6 +134,23 @@ so the names must belong to real Minecraft accounts.
 - Only entries from the configuration are managed. Players you add in game stay.
 - An entry that you delete from the configuration is removed from the server on the next start.
 - Changes in the configuration take effect on the next start of the add-on.
+
+---
+
+## ⚙️ Performance and resource limits
+
+Home Assistant cannot set CPU or memory limits per add-on, so the add-on applies them itself:
+
+| Option | What it does |
+|---|---|
+| `performance_profile` | `custom` leaves `server.properties` alone. `low` (view distance 6, simulation distance 4, 10 players), `balanced` (8, 6, 20) and `high` (12, 8, 40) set `view-distance`, `simulation-distance` and `max-players` on every start. The simulation distance has the biggest effect on CPU load. |
+| `cpu_priority` | `normal`, `low` (nice 10) or `lowest` (nice 19). With a lower priority the server gives way to Home Assistant when the CPU is busy. |
+| `cpu_cores` | Number of CPU cores the server may use, `0` means all. The server runs on the last cores, so the first ones stay free for the system and Home Assistant. Java adjusts its GC and JIT threads to the core count. |
+| `memory_guard` | Limits `xmx_mb` automatically so that at least a quarter of the system RAM (and at least 1536 MB) stays free. A container memory limit is taken into account. Without it Linux ends the add-on first when memory runs out. |
+| `fixed_heap` | Sets `xms_mb` equal to `xmx_mb` and claims the memory at startup. This avoids heap resizing while running, as Paper recommends. Starting takes a little longer. |
+
+The add-on always starts Java with the G1 garbage collector. Without it Java silently falls back to the slow
+SerialGC on machines with fewer than 2 CPUs or less than 1.75 GB RAM.
 
 ---
 

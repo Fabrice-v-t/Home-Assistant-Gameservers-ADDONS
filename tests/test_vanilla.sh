@@ -57,7 +57,7 @@ t_normalstart() {
   assert_file_has "server.jar" "SERVERJAR 26.3"
   assert_file_has "eula.txt" "eula=true"
   assert_file_has "server.properties" "server-port=25565"
-  assert_java_args "major=25 args=-Xms512M -Xmx1024M -jar server.jar nogui"
+  assert_java_args "major=25 args=-Xms512M -Xmx1024M -XX:+UseG1GC -jar server.jar nogui"
   assert_out_has "Java Version: openjdk version \"25.0.1\""
   assert_no_file "server.jar.tmp"
 }
@@ -298,6 +298,150 @@ t_spielerlisten_leer() {
   assert_file_has "server.properties" "white-list=false"
 }
 
+t_cpu_prioritaet() {
+  vanilla_sandbox "Leistung: cpu_priority setzt die nice-Stufe"
+  run_addon
+  assert_java_args "nice=0 "
+  set_options '{"cpu_priority": "low"}'
+  run_addon
+  assert_rc 0
+  assert_java_args "nice=10 "
+  set_options '{"cpu_priority": "lowest"}'
+  run_addon
+  assert_java_args "nice=19 "
+  set_options '{"cpu_priority": "bogus"}'
+  run_addon
+  assert_rc 0
+  assert_out_has "Unbekannte CPU-Priorität 'bogus', nutze normal"
+  assert_java_args "nice=0 "
+}
+
+t_cpu_kerne() {
+  vanilla_sandbox "Leistung: cpu_cores beschränkt Kerne und Java-Threads"
+  if (( $(nproc) < 2 )); then
+    ok "übersprungen: weniger als 2 Kerne verfügbar"
+    return
+  fi
+  set_options '{"cpu_cores": 1}'
+  run_addon
+  assert_rc 0
+  assert_java_args "-XX:ActiveProcessorCount=1 "
+  assert_java_args "cpus=1"
+
+  set_options '{"cpu_cores": 999}'
+  run_addon
+  assert_rc 0
+  assert_out_has "keine Einschränkung nötig"
+  if grep -q "ActiveProcessorCount" "${MOCK_JAVA_LOG}"; then nok "ActiveProcessorCount unerwartet gesetzt"; else ok "ActiveProcessorCount nicht gesetzt"; fi
+
+  set_options '{"cpu_cores": "abc"}'
+  run_addon
+  assert_rc 1
+  assert_out_has "cpu_cores muss eine ganze Zahl sein"
+}
+
+t_ram_schutz() {
+  vanilla_sandbox "Leistung: RAM-Schutz begrenzt xmx_mb"
+  # 4 GB RAM: mindestens 1536 MB bleiben frei, also höchstens 2560 MB Heap
+  printf 'MemTotal:        4194304 kB\n' > "${T}/meminfo"
+  set_options '{"xms_mb": 1024, "xmx_mb": 4096}'
+  run_addon
+  assert_rc 0
+  assert_out_has "xmx_mb (4096) ist zu hoch für 4096 MB RAM, begrenze auf 2560 MB"
+  assert_java_args "-Xms1024M -Xmx2560M "
+
+  set_options '{"xms_mb": 3000, "xmx_mb": 4000}'
+  run_addon
+  assert_java_args "-Xms2560M -Xmx2560M "
+
+  # Passt der Wert, bleibt alles unverändert
+  set_options '{"xms_mb": 512, "xmx_mb": 2000}'
+  run_addon
+  assert_out_lacks "ist zu hoch"
+  assert_java_args "-Xms512M -Xmx2000M "
+
+  # Mit großem RAM bleibt ein Viertel frei (16 GB: 12288 MB Heap)
+  printf 'MemTotal:       16777216 kB\n' > "${T}/meminfo"
+  set_options '{"xms_mb": 1024, "xmx_mb": 20000}'
+  run_addon
+  assert_java_args "-Xmx12288M "
+
+  # Ausgeschaltet greift nichts
+  set_options '{"xms_mb": 1024, "xmx_mb": 20000, "memory_guard": false}'
+  run_addon
+  assert_out_lacks "ist zu hoch"
+  assert_java_args "-Xmx20000M "
+}
+
+t_ram_schutz_container_limit() {
+  vanilla_sandbox "Leistung: RAM-Schutz beachtet ein Container-Limit"
+  printf '%s\n' 2147483648 > "${T}/cgroup-limit"
+  export CGROUP_MEM_FILE="${T}/cgroup-limit"
+  set_options '{"xms_mb": 256, "xmx_mb": 1024}'
+  run_addon
+  assert_rc 0
+  assert_out_has "ist zu hoch für 2048 MB RAM, begrenze auf 512 MB"
+  assert_java_args "-Xms256M -Xmx512M "
+  export CGROUP_MEM_FILE="${T}/no-cgroup-limit"
+}
+
+t_ram_schutz_ohne_meminfo() {
+  vanilla_sandbox "Leistung: RAM-Schutz ohne lesbaren RAM-Wert überspringt sich"
+  export MEMINFO_FILE="${T}/gibt-es-nicht"
+  run_addon
+  assert_rc 0
+  assert_out_has "Gesamt-RAM nicht ermittelbar, RAM-Schutz übersprungen"
+  assert_java_args "-Xmx1024M "
+  export MEMINFO_FILE="${T}/meminfo"
+}
+
+t_fester_heap() {
+  vanilla_sandbox "Leistung: fixed_heap setzt Xms gleich Xmx und belegt den Heap vorab"
+  set_options '{"xms_mb": 256, "xmx_mb": 1024, "fixed_heap": true}'
+  run_addon
+  assert_rc 0
+  assert_java_args "-Xms1024M -Xmx1024M "
+  assert_java_args "-XX:+AlwaysPreTouch"
+}
+
+t_leistungsprofil() {
+  vanilla_sandbox "Leistung: performance_profile setzt Sicht- und Simulationsweite"
+  run_addon
+  assert_rc 0
+  if grep -qE "^(view|simulation)-distance=" "${DATA}/server.properties"; then nok "custom ändert die Weiten"; else ok "custom lässt server.properties unangetastet"; fi
+
+  set_options '{"performance_profile": "low"}'
+  run_addon
+  assert_file_has "server.properties" "view-distance=6"
+  assert_file_has "server.properties" "simulation-distance=4"
+  assert_file_has "server.properties" "max-players=10"
+  assert_out_has "Leistungsprofil low: view-distance=6, simulation-distance=4, max-players=10"
+
+  set_options '{"performance_profile": "balanced"}'
+  run_addon
+  assert_file_has "server.properties" "view-distance=8"
+  assert_file_has "server.properties" "simulation-distance=6"
+  assert_file_has "server.properties" "max-players=20"
+
+  set_options '{"performance_profile": "high"}'
+  run_addon
+  assert_file_has "server.properties" "view-distance=12"
+  assert_file_has "server.properties" "simulation-distance=8"
+  assert_file_has "server.properties" "max-players=40"
+
+  # Zurück auf custom: der zuletzt gesetzte Wert bleibt stehen und wird nicht mehr verändert
+  printf 'view-distance=14\nserver-port=25565\n' > "${DATA}/server.properties"
+  set_options '{"performance_profile": "custom"}'
+  run_addon
+  assert_file_has "server.properties" "view-distance=14"
+
+  set_options '{"performance_profile": "turbo"}'
+  run_addon
+  assert_rc 0
+  assert_out_has "Unbekanntes Leistungsprofil 'turbo', nutze custom"
+  assert_file_has "server.properties" "view-distance=14"
+}
+
 t_server_exitcode_wird_durchgereicht() {
   sandbox "Abstürzender Server: Exit-Code wird durchgereicht" "${SCRIPT}"
   vanilla_fixture
@@ -315,7 +459,7 @@ for t in t_eula_fehlt t_xms_groesser_xmx t_normalstart t_java_aus_mojang_metadat
          t_unbekannte_version t_manifest_nicht_erreichbar t_eigene_jar_url \
          t_eigene_jar_url_nur_https t_server_exitcode_wird_durchgereicht \
          t_spielerlisten_befehle t_spielerlisten_abgleich t_spielerlisten_ungueltige_namen \
-         t_spielerlisten_leer; do
+         t_spielerlisten_leer t_cpu_prioritaet t_cpu_kerne t_ram_schutz t_ram_schutz_container_limit t_ram_schutz_ohne_meminfo t_fester_heap t_leistungsprofil; do
   "${t}"
 done
 
