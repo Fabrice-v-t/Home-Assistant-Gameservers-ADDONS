@@ -1,4 +1,5 @@
-FROM ghcr.io/hassio-addons/debian-base:stable
+# Basisimage gepinnt, damit Builds reproduzierbar bleiben (bei Bedarf bewusst anheben)
+FROM ghcr.io/hassio-addons/debian-base:9.5.1
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
