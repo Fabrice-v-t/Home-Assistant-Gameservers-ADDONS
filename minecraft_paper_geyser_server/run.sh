@@ -45,6 +45,8 @@ ALLOW_EXPERIMENTAL="$(opt allow_experimental)"; : "${ALLOW_EXPERIMENTAL:=false}"
 BEDROCK_SUPPORT="$(opt bedrock_support)";       : "${BEDROCK_SUPPORT:=true}"
 UPDATE_PLUGINS="$(opt update_plugins)";         : "${UPDATE_PLUGINS:=true}"
 JAVA_MAJOR_OPT="$(opt java_major)"
+WHITELIST_ENABLED="$(opt whitelist_enabled)";   : "${WHITELIST_ENABLED:=false}"
+[[ "${WHITELIST_ENABLED}" == "true" ]] || WHITELIST_ENABLED="false"
 mapfile -t EXTRA_URLS < <(jq -r '.plugin_urls // [] | .[]' "${OPTIONS_FILE}")
 
 # -----------------------------------------------------------
@@ -362,17 +364,151 @@ EOF
 log_info "EULA gemäß Konfiguration akzeptiert"
 
 # -----------------------------------------------------------
-# server.properties: Java-Port fest setzen
+# server.properties: Java-Port und Whitelist-Schalter setzen
 # -----------------------------------------------------------
-if [[ -f "./server.properties" ]]; then
-  if grep -q '^server-port=' ./server.properties; then
-    sed -i "s/^server-port=.*/server-port=${JAVA_PORT}/" ./server.properties
+# set_property <Schlüssel> <Wert>: setzt oder ergänzt einen Eintrag
+set_property() {
+  [[ -f ./server.properties ]] || : > ./server.properties
+  if grep -q "^$1=" ./server.properties; then
+    sed -i "s/^$1=.*/$1=$2/" ./server.properties
   else
-    echo "server-port=${JAVA_PORT}" >> ./server.properties
+    echo "$1=$2" >> ./server.properties
   fi
-else
-  echo "server-port=${JAVA_PORT}" > ./server.properties
-fi
+}
+
+set_property server-port "${JAVA_PORT}"
+set_property white-list "${WHITELIST_ENABLED}"
+set_property enforce-whitelist "${WHITELIST_ENABLED}"
+
+# -----------------------------------------------------------
+# Spielerlisten (whitelist, ops, banned_players)
+# -----------------------------------------------------------
+# Die Listen aus der Add-on-Konfiguration werden bei jedem Start mit dem Server
+# abgeglichen, indem passende Konsolenbefehle an den Server geschickt werden (der
+# Server löst die UUIDs selbst auf). Verwaltet werden nur Einträge aus der
+# Konfiguration: Was im Spiel hinzugefügt wurde, bleibt unangetastet. Entfernt wird
+# nur, was zuvor in der Konfiguration stand und dort gelöscht wurde.
+# Bedrock-Spieler stehen mit Punkt-Präfix in der Liste (z. B. ".Steve").
+PLAYER_STATE=".managed_players.json"
+PLAYER_MARKER="${TMP_BASE}/mc_started"
+PLAYER_NAME_RE='^\.?[A-Za-z0-9_]{1,16}$'
+
+# list_opt <Schlüssel>: Einträge einer Listen-Option, einer pro Zeile
+list_opt() { jq -r --arg k "$1" '.[$k] // [] | .[]' "${OPTIONS_FILE}"; }
+
+# file_names <Datei>: Namen (klein geschrieben) aus whitelist.json, ops.json oder banned-players.json
+file_names() {
+  if [[ -f "$1" ]]; then
+    jq -r '.[].name | ascii_downcase' "$1" 2>/dev/null || true
+  fi
+}
+
+# player_commands <Schlüssel> <Datei> <Befehl hinzufügen> <Befehl entfernen> <Bedrock hinzufügen> <Bedrock entfernen>
+# Gibt die nötigen Konsolenbefehle aus. Für Namen mit Punkt gelten die Bedrock-Befehle; sind sie
+# gleich den normalen, bleibt der Punkt im Namen, sonst wird er entfernt. Ein leerer
+# Bedrock-Befehl überspringt solche Namen.
+player_commands() {
+  local key="$1" file="$2" add="$3" remove="$4" b_add="$5" b_remove="$6"
+  local name lower
+  local -A current=() existing=()
+  local -a wanted=() previous=()
+
+  while IFS= read -r name; do
+    if [[ -z "${name}" ]]; then
+      continue
+    elif ! [[ "${name}" =~ ${PLAYER_NAME_RE} ]]; then
+      log_warn "Ungültiger Spielername in '${key}' ignoriert: ${name}" >&2
+      continue
+    fi
+    current["${name,,}"]=1
+    wanted+=("${name}")
+  done < <(list_opt "${key}")
+
+  while IFS= read -r lower; do
+    if [[ -n "${lower}" ]]; then existing["${lower}"]=1; fi
+  done < <(file_names "${file}")
+
+  while IFS= read -r name; do
+    if [[ -n "${name}" ]]; then previous+=("${name,,}"); fi
+  done < <(jq -r --arg k "${key}" '.[$k] // [] | .[]' "${PLAYER_STATE}" 2>/dev/null || true)
+
+  for name in "${wanted[@]}"; do
+    [[ -z "${existing[${name,,}]:-}" ]] || continue
+    emit_player_command "${name}" "${add}" "${b_add}"
+  done
+
+  for lower in "${previous[@]}"; do
+    [[ "${lower}" =~ ${PLAYER_NAME_RE} ]] || continue
+    [[ -z "${current[${lower}]:-}" && -n "${existing[${lower}]:-}" ]] || continue
+    emit_player_command "${lower}" "${remove}" "${b_remove}"
+  done
+}
+
+# emit_player_command <Name> <Befehl> <Bedrock-Befehl>
+emit_player_command() {
+  local name="$1" cmd="$2" b_cmd="$3"
+  if [[ "${name}" == .* ]]; then
+    if [[ -z "${b_cmd}" ]]; then
+      log_warn "Bedrock-Spieler ${name} übersprungen (Bedrock-Unterstützung ist aus)" >&2
+    elif [[ "${b_cmd}" == "${cmd}" ]]; then
+      echo "${b_cmd} ${name}"
+    else
+      echo "${b_cmd} ${name#.}"
+    fi
+  else
+    echo "${cmd} ${name}"
+  fi
+}
+
+# save_player_state: merkt sich den Stand der Konfiguration (für spätere Entfernungen)
+save_player_state() {
+  jq '{whitelist: (.whitelist // []), ops: (.ops // []), banned_players: (.banned_players // [])}' \
+    "${OPTIONS_FILE}" > "${PLAYER_STATE}"
+}
+
+# send_player_commands <Befehle>: läuft im Hintergrund. Der Server verarbeitet Befehle erst
+# zuverlässig nach dem Start, deshalb wird auf den neuen "Done"-Eintrag in logs/latest.log
+# gewartet (neu = nicht älter als die Marker-Datei, die vor dem Java-Start angelegt wird).
+# Der Stand wird erst gespeichert, wenn die Befehle gesendet wurden. Stoppt der Server
+# vorher, wird beim nächsten Start alles erneut versucht.
+send_player_commands() {
+  local cmds="$1" i
+  for (( i = 0; i < 900; i++ )); do
+    kill -0 "${JAVA_PID}" 2>/dev/null || return 0
+    if [[ -f logs/latest.log && ! "${PLAYER_MARKER}" -nt logs/latest.log ]] && grep -q 'Done (' logs/latest.log 2>/dev/null; then
+      break
+    fi
+    sleep 1
+  done
+  sleep "${PLAYER_SYNC_DELAY:-2}"
+  kill -0 "${JAVA_PID}" 2>/dev/null || return 0
+  printf '%s\n' "${cmds}" >&3
+  save_player_state
+}
+
+# Gleicht die Listen mit dem Server ab (Befehle über die stdin-Pipe, Dateideskriptor 3)
+apply_player_lists() {
+  local cmds="" count b_wl_add="" b_wl_remove=""
+  if [[ "${BEDROCK_SUPPORT}" == "true" ]]; then
+    b_wl_add="fwhitelist add"
+    b_wl_remove="fwhitelist remove"
+  fi
+
+  cmds="$(
+    player_commands whitelist whitelist.json "whitelist add" "whitelist remove" "${b_wl_add}" "${b_wl_remove}"
+    player_commands ops ops.json "op" "deop" "op" "deop"
+    player_commands banned_players banned-players.json "ban" "pardon" "ban" "pardon"
+  )"
+
+  if [[ -z "${cmds}" ]]; then
+    save_player_state
+    return 0
+  fi
+
+  count="$(wc -l <<<"${cmds}" | tr -d ' ')"
+  log_info "Gleiche Spielerlisten ab (${count} Befehle), sobald der Server bereit ist"
+  send_player_commands "${cmds}" &
+}
 
 # -----------------------------------------------------------
 # Start (mit sauberem Shutdown bei SIGTERM)
@@ -407,8 +543,11 @@ graceful_stop() {
 }
 trap graceful_stop TERM INT
 
+touch "${PLAYER_MARKER}"
 java -Xms"${XMS_MB}M" -Xmx"${XMX_MB}M" -jar "${PAPER_JAR}" nogui <&3 &
 JAVA_PID=$!
+
+apply_player_lists || log_warn "Spielerlisten konnten nicht abgeglichen werden"
 
 set +e
 wait "${JAVA_PID}"

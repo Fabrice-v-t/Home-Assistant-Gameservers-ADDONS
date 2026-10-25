@@ -25,6 +25,9 @@ Paper + Geyser: `latest` picks the newest version with a `STABLE` build and skip
 downloads (server still starts, existing JAR is kept), `update_plugins=false`, `bedrock_support=false`,
 non-https plugin URLs are ignored, the one-time Geyser configuration.
 
+Both add-ons: the whitelist, ban list and operator lists (commands sent to the server, sync of added and removed
+entries, invalid names, the whitelist switch). Paper additionally covers Bedrock names with a dot.
+
 ## How it works
 
 - `mocks/curl` serves files from a fake web root (`$MOCK_WWW`) and logs every request. Failures are injected

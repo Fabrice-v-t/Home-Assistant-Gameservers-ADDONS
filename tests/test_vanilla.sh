@@ -221,6 +221,83 @@ t_eigene_jar_url_nur_https() {
   assert_calls "keine Downloads" "." 0
 }
 
+vanilla_sandbox() {
+  sandbox "$1" "${SCRIPT}"
+  vanilla_fixture
+}
+
+t_spielerlisten_befehle() {
+  vanilla_sandbox "Spielerlisten: Befehle an den Server und Whitelist-Schalter"
+  set_options '{"whitelist_enabled": true, "whitelist": ["Alice", "Bob"], "ops": ["Alice"], "banned_players": ["Griefer"]}'
+  run_lists_scenario 4
+  assert_rc 0
+  assert_cmd "whitelist add Alice"
+  assert_cmd "whitelist add Bob"
+  assert_cmd "op Alice"
+  assert_cmd "ban Griefer"
+  assert_cmd "stop"
+  assert_out_has "Gleiche Spielerlisten ab (4 Befehle)"
+  assert_file_has "server.properties" "white-list=true"
+  assert_file_has "server.properties" "enforce-whitelist=true"
+  assert_file_has "server.properties" "server-port=25565"
+  assert_file ".managed_players.json"
+}
+
+t_spielerlisten_abgleich() {
+  vanilla_sandbox "Spielerlisten: nur Neues hinzufügen, nur Entferntes entfernen"
+  mkdir -p "${DATA}"
+  # Alice ist schon auf dem Server, Carol stand zuvor in der Konfiguration, Dave wurde im Spiel hinzugefügt
+  printf '[{"uuid":"1","name":"alice"},{"uuid":"2","name":"Carol"},{"uuid":"3","name":"Dave"}]' > "${DATA}/whitelist.json"
+  printf '[{"uuid":"4","name":"Oldop","level":4}]' > "${DATA}/ops.json"
+  printf '{"whitelist":["Alice","Carol"],"ops":["Oldop"],"banned_players":[]}' > "${DATA}/.managed_players.json"
+  set_options '{"whitelist": ["Alice", "Bob"], "ops": [], "banned_players": ["Griefer"]}'
+  run_lists_scenario 4
+  assert_rc 0
+  assert_no_cmd "whitelist add Alice"
+  assert_cmd "whitelist add Bob"
+  assert_cmd "whitelist remove carol"
+  assert_no_cmd "whitelist remove dave"
+  assert_cmd "deop oldop"
+  assert_cmd "ban Griefer"
+  assert_file_has "server.properties" "white-list=false"
+  assert_file_has ".managed_players.json" "Bob"
+
+  # Zweiter Lauf mit unveränderter Konfiguration und aktualisierten Dateien: nichts zu tun
+  printf '[{"uuid":"1","name":"Alice"},{"uuid":"5","name":"Bob"},{"uuid":"3","name":"Dave"}]' > "${DATA}/whitelist.json"
+  printf '[]' > "${DATA}/ops.json"
+  printf '[{"uuid":"6","name":"Griefer"}]' > "${DATA}/banned-players.json"
+  run_lists_scenario 1
+  assert_rc 0
+  assert_out_lacks "Gleiche Spielerlisten ab"
+}
+
+t_spielerlisten_ungueltige_namen() {
+  vanilla_sandbox "Spielerlisten: ungültige Namen werden nie an den Server geschickt"
+  set_options '{"whitelist": ["bad name", "x;stop", "Valid_1", "a.b", ".Steve", "waytoolongplayername1"], "ops": ["op evil"]}'
+  run_lists_scenario 1
+  assert_rc 0
+  assert_cmd "whitelist add Valid_1"
+  assert_no_cmd "whitelist add bad name"
+  assert_no_cmd "whitelist add x;stop"
+  assert_no_cmd "whitelist add a.b"
+  assert_no_cmd "whitelist add .Steve"
+  assert_no_cmd "fwhitelist add Steve"
+  assert_no_cmd "op op evil"
+  assert_out_has "Ungültiger Spielername in 'whitelist' ignoriert: bad name"
+  assert_out_has "Ungültiger Spielername in 'ops' ignoriert: op evil"
+}
+
+
+
+t_spielerlisten_leer() {
+  vanilla_sandbox "Spielerlisten: leere Listen erzeugen keine Befehle"
+  run_lists_scenario 0
+  assert_rc 0
+  assert_out_lacks "Gleiche Spielerlisten ab"
+  assert_no_cmd "whitelist add"
+  assert_file_has "server.properties" "white-list=false"
+}
+
 t_server_exitcode_wird_durchgereicht() {
   sandbox "Abstürzender Server: Exit-Code wird durchgereicht" "${SCRIPT}"
   vanilla_fixture
@@ -236,7 +313,9 @@ for t in t_eula_fehlt t_xms_groesser_xmx t_normalstart t_java_aus_mojang_metadat
          t_alte_java_wird_aufgeraeumt t_sigterm \
          t_neustart_ohne_redownload t_neue_version_laedt_neu t_pruefsumme_falsch \
          t_unbekannte_version t_manifest_nicht_erreichbar t_eigene_jar_url \
-         t_eigene_jar_url_nur_https t_server_exitcode_wird_durchgereicht; do
+         t_eigene_jar_url_nur_https t_server_exitcode_wird_durchgereicht \
+         t_spielerlisten_befehle t_spielerlisten_abgleich t_spielerlisten_ungueltige_namen \
+         t_spielerlisten_leer; do
   "${t}"
 done
 

@@ -79,6 +79,28 @@ version). If Floodgate could not be downloaded, the file is not created and Geys
 | `plugin_urls` | Additional plugins as direct `https://...jar` links. Other schemes are ignored |
 | `java_major` | Optional. Forces a Java version. By default it is read from Paper's version metadata |
 | `xms_mb` / `xmx_mb` | Minimum / maximum RAM in MB (`xms_mb` must not exceed `xmx_mb`) |
+| `whitelist_enabled` | Only whitelisted players can join |
+| `whitelist` | Player names on the whitelist (Bedrock players with a leading dot) |
+| `ops` | Player names with operator rights |
+| `banned_players` | Player names on the ban list |
+
+## Whitelist, ban list and operators
+
+The three lists can be edited in the add-on configuration (**Whitelist**, **Banned players**, **Operators**).
+Add one player name per entry. The whitelist is only enforced while **Enable the whitelist** is on.
+
+On every start the add-on compares the lists with the server and sends the matching console commands
+(`whitelist add`, `ban`, `op` and their counterparts) once the server is ready. The server looks up the UUIDs itself,
+so Java names must belong to real Minecraft accounts.
+
+- Only entries from the configuration are managed. Players you add in game stay.
+- An entry that you delete from the configuration is removed from the server on the next start.
+- Changes in the configuration take effect on the next start of the add-on.
+- **Bedrock players** start with a dot, for example `.Steve` (Floodgate prefix, no spaces, use `_` instead).
+  On the whitelist this uses Floodgate's `fwhitelist`. It looks the gamertag up in Geyser's cache, which does not know
+  every player. If it does not find a player, enter the XUID instead of the gamertag (`.2535400000000000`).
+  Operators and bans for Bedrock players only work after the player has joined once, because the server
+  has to know the player first.
 
 ## Notes
 

@@ -1,0 +1,36 @@
+configuration:
+  data_dir:
+    name: Data directory
+    description: Where the server files, worlds and the Java runtime are stored.
+  accept_eula:
+    name: Accept the Minecraft EULA
+    description: Must be enabled to start the server. By enabling it you agree to the Minecraft EULA (https://aka.ms/MinecraftEULA).
+  xms_mb:
+    name: Minimum RAM (MB)
+    description: Must not be greater than the maximum RAM.
+  xmx_mb:
+    name: Maximum RAM (MB)
+    description: Maximum memory for the server.
+  mc_version:
+    name: Minecraft version
+    description: '"latest" or a specific version, for example 1.21.1.'
+  server_jar_url:
+    name: Custom server JAR URL
+    description: Optional https link to a server JAR. Overrides the Minecraft version and is not checksum verified.
+  java_major:
+    name: Java version
+    description: Optional. Forces a Java version. By default it is read from the Mojang metadata.
+  whitelist_enabled:
+    name: Enable the whitelist
+    description: Only players on the whitelist can join. The list itself works even while this is off.
+  whitelist:
+    name: Whitelist
+    description: Player names that are allowed to join. Synchronized with the server on every start. Entries added in game are kept, entries removed here are removed from the server.
+  ops:
+    name: Operators
+    description: Player names with operator rights. Synchronized with the server on every start.
+  banned_players:
+    name: Banned players
+    description: Player names that cannot join (the ban list). Synchronized with the server on every start.
+network:
+  25565/tcp: Minecraft server port (container fixed to 25565)

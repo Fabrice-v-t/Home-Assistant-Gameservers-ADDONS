@@ -86,6 +86,7 @@ sandbox() {
   export MOCK_JAVA_LOG="${T}/java_invocations.log"
   export MOCK_JAVA_MODE="exit"
   export MOCK_JAVA_EXIT_CODE="0"
+  export PLAYER_SYNC_DELAY="0.2"
   : > "${MOCK_CALLS}"
   : > "${MOCK_FAIL}"
   : > "${MOCK_JAVA_LOG}"
@@ -207,6 +208,30 @@ scenario_sigterm() {
     assert_file_has "logs/latest.log" "Saving worlds"
   fi
   export MOCK_JAVA_MODE="exit"
+}
+
+# Startet den Mock-Server (wait-Modus), wartet bis mindestens <N> Zeilen auf seinem stdin
+# angekommen sind (die Spielerlisten-Befehle), schickt dann SIGTERM und wartet auf das Ende.
+run_lists_scenario() {
+  local expected="$1" i
+  export MOCK_JAVA_MODE="wait"
+  if start_addon_bg; then
+    for i in $(seq 1 100); do
+      [[ -f "${DATA}/.managed_players.json" ]] && (( $(wc -l < "${MOCK_STDIN_LOG}") >= expected )) && break
+      sleep 0.1
+    done
+    kill -TERM "${ADDON_PID}"
+    wait_addon_bg
+  fi
+  export MOCK_JAVA_MODE="exit"
+}
+
+# assert_cmd <Zeile>: der Server hat diesen Befehl auf stdin erhalten
+assert_cmd() {
+  if grep -qxF -- "$1" "${MOCK_STDIN_LOG}"; then ok "Befehl an den Server: $1"; else nok "Befehl fehlt: $1 (erhalten: $(tr "\n" "|" < "${MOCK_STDIN_LOG}"))"; fi
+}
+assert_no_cmd() {
+  if grep -qxF -- "$1" "${MOCK_STDIN_LOG}"; then nok "Unerwarteter Befehl an den Server: $1"; else ok "Kein Befehl: $1"; fi
 }
 
 assert_file_stdin_has_stop() {

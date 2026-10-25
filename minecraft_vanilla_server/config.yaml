@@ -44,6 +44,13 @@ options:
   # Optional: feste Server-JAR URL (überschreibt mc_version, nur https)
   server_jar_url: ""
 
+  # Spielerlisten, werden bei jedem Start mit dem Server abgeglichen
+  # (Whitelist nur aktiv, wenn whitelist_enabled true ist)
+  whitelist_enabled: false
+  whitelist: []
+  ops: []
+  banned_players: []
+
 schema:
   data_dir: str
   accept_eula: bool
@@ -53,3 +60,10 @@ schema:
   server_jar_url: str?
   # Optional: Java-Version erzwingen (sonst aus den Mojang-Metadaten)
   java_major: int(8,99)?
+  whitelist_enabled: bool
+  whitelist:
+    - match(^[A-Za-z0-9_]{1,16}$)
+  ops:
+    - match(^[A-Za-z0-9_]{1,16}$)
+  banned_players:
+    - match(^[A-Za-z0-9_]{1,16}$)

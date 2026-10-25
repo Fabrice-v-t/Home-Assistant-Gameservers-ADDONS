@@ -1,0 +1,47 @@
+configuration:
+  data_dir:
+    name: Data directory
+    description: Where the server files, worlds, plugins and the Java runtime are stored.
+  accept_eula:
+    name: Accept the Minecraft EULA
+    description: Must be enabled to start the server. By enabling it you agree to the Minecraft EULA (https://aka.ms/MinecraftEULA).
+  xms_mb:
+    name: Minimum RAM (MB)
+    description: Must not be greater than the maximum RAM.
+  xmx_mb:
+    name: Maximum RAM (MB)
+    description: Maximum memory for the server.
+  mc_version:
+    name: Minecraft version
+    description: '"latest" (newest version with a stable Paper build) or a specific version, for example 1.21.11.'
+  allow_experimental:
+    name: Allow experimental builds
+    description: Also accept beta and alpha Paper builds and pre-releases. PaperMC gives no support for them.
+  bedrock_support:
+    name: Bedrock support
+    description: Install Geyser and Floodgate so Bedrock players can join.
+  update_plugins:
+    name: Update Geyser and Floodgate
+    description: Refresh both plugins on every start. If disabled, existing JARs are kept.
+  plugin_urls:
+    name: Additional plugins
+    description: Direct https links to plugin JAR files.
+  java_major:
+    name: Java version
+    description: Optional. Forces a Java version. By default it is read from Paper's version metadata.
+  whitelist_enabled:
+    name: Enable the whitelist
+    description: Only players on the whitelist can join. The list itself works even while this is off.
+  whitelist:
+    name: Whitelist
+    description: Player names that are allowed to join. Bedrock players start with a dot, for example .Steve, or .XUID if the gamertag is not found (needs Bedrock support). Synchronized with the server on every start. Entries added in game are kept, entries removed here are removed from the server.
+  ops:
+    name: Operators
+    description: Player names with operator rights. A Bedrock player (name with a dot) must have joined once before this works. Synchronized with the server on every start.
+  banned_players:
+    name: Banned players
+    description: Player names that cannot join (the ban list). A Bedrock player (name with a dot) must have joined once before this works. Synchronized with the server on every start.
+network:
+  25565/tcp: Minecraft Java Edition (TCP)
+  19132/tcp: Minecraft Bedrock Edition via Geyser, signaling (TCP)
+  19132/udp: Minecraft Bedrock Edition via Geyser (UDP)

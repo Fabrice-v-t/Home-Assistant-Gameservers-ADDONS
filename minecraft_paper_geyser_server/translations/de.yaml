@@ -1,0 +1,47 @@
+configuration:
+  data_dir:
+    name: Datenverzeichnis
+    description: Ablageort für Serverdateien, Welten, Plugins und die Java-Laufzeit.
+  accept_eula:
+    name: Minecraft-EULA akzeptieren
+    description: Muss aktiviert sein, damit der Server startet. Mit der Aktivierung stimmst du der Minecraft-EULA zu (https://aka.ms/MinecraftEULA).
+  xms_mb:
+    name: Minimaler RAM (MB)
+    description: Darf nicht größer sein als der maximale RAM.
+  xmx_mb:
+    name: Maximaler RAM (MB)
+    description: Maximaler Speicher für den Server.
+  mc_version:
+    name: Minecraft-Version
+    description: '"latest" (neueste Version mit stabilem Paper-Build) oder eine bestimmte Version, zum Beispiel 1.21.11.'
+  allow_experimental:
+    name: Experimentelle Builds erlauben
+    description: Akzeptiert auch Beta- und Alpha-Builds von Paper sowie Vorabversionen. PaperMC leistet dafür keinen Support.
+  bedrock_support:
+    name: Bedrock-Unterstützung
+    description: Installiert Geyser und Floodgate, damit Bedrock-Spieler beitreten können.
+  update_plugins:
+    name: Geyser und Floodgate aktualisieren
+    description: Aktualisiert beide Plugins bei jedem Start. Wenn ausgeschaltet, bleiben vorhandene JARs erhalten.
+  plugin_urls:
+    name: Weitere Plugins
+    description: Direkte https-Links auf Plugin-JAR-Dateien.
+  java_major:
+    name: Java-Version
+    description: Optional. Erzwingt eine Java-Version. Standardmäßig wird sie aus den Paper-Metadaten gelesen.
+  whitelist_enabled:
+    name: Whitelist aktivieren
+    description: Nur Spieler auf der Whitelist dürfen beitreten. Die Liste selbst wird auch bei ausgeschalteter Whitelist gepflegt.
+  whitelist:
+    name: Whitelist
+    description: Spielernamen, die beitreten dürfen. Bedrock-Spieler beginnen mit einem Punkt, zum Beispiel .Steve, oder .XUID, wenn die Gamertag nicht gefunden wird (braucht Bedrock-Unterstützung). Wird bei jedem Start mit dem Server abgeglichen. Im Spiel hinzugefügte Einträge bleiben erhalten, hier entfernte Einträge werden auch auf dem Server entfernt.
+  ops:
+    name: Operatoren
+    description: Spielernamen mit Operator-Rechten. Ein Bedrock-Spieler (Name mit Punkt) muss einmal beigetreten sein, bevor das funktioniert. Wird bei jedem Start mit dem Server abgeglichen.
+  banned_players:
+    name: Gesperrte Spieler
+    description: Spielernamen, die nicht beitreten dürfen (Sperrliste). Ein Bedrock-Spieler (Name mit Punkt) muss einmal beigetreten sein, bevor das funktioniert. Wird bei jedem Start mit dem Server abgeglichen.
+network:
+  25565/tcp: Minecraft Java Edition (TCP)
+  19132/tcp: Minecraft Bedrock Edition über Geyser, Signaling (TCP)
+  19132/udp: Minecraft Bedrock Edition über Geyser (UDP)
