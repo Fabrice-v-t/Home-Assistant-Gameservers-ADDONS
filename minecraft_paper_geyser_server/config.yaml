@@ -1,0 +1,73 @@
+name: "Minecraft Paper + Geyser (Java & Bedrock)"
+slug: minecraft_paper_geyser_server
+description: >
+  Paper Minecraft server with Geyser and Floodgate, so Java and Bedrock
+  players can play together. Installs the newest stable Paper build and
+  the Java version it requires, verifies the download checksum and stores
+  all data persistently in /share. The Minecraft EULA must be accepted
+  explicitly in the add-on configuration.
+version: "0.0.1"
+
+arch:
+  - amd64
+  - aarch64
+
+init: false
+# Kein Host-Netzwerk (HA-Standard): nur die unten gelisteten Ports werden veröffentlicht
+
+# Zeit zum sauberen Speichern der Welt beim Stoppen (Standard sind 10 s)
+timeout: 60
+
+# Nur die Ports, die gebraucht werden.
+# Die Host-Ports können im HA UI geändert werden.
+# Bedrock nutzt ab 26.60 NetherNet: TCP für das Signaling, UDP für das Spiel (beide 19132).
+ports:
+  25565/tcp: 25565
+  19132/tcp: 19132
+  19132/udp: 19132
+ports_description:
+  25565/tcp: "Minecraft Java Edition (TCP)"
+  19132/tcp: "Minecraft Bedrock Edition via Geyser, Signaling (TCP)"
+  19132/udp: "Minecraft Bedrock Edition via Geyser (UDP)"
+
+map:
+  - share:rw
+
+options:
+  data_dir: "/share/minecraft-paper"
+
+  # Muss auf true gesetzt werden: https://aka.ms/MinecraftEULA
+  accept_eula: false
+
+  # RAM (MB)
+  xms_mb: 1024
+  xmx_mb: 4096
+
+  # "latest" = neueste Version mit stabilem Paper-Build, oder z.B. "1.21.11"
+  mc_version: "latest"
+
+  # Auch Beta/Alpha-Builds zulassen (von PaperMC nicht supportet)
+  allow_experimental: false
+
+  # Geyser + Floodgate installieren (Bedrock-Spieler)
+  bedrock_support: true
+
+  # Geyser/Floodgate bei jedem Start auf die neueste Version aktualisieren
+  update_plugins: true
+
+  # Weitere Plugins: direkte https-Links auf .jar-Dateien
+  plugin_urls: []
+
+schema:
+  data_dir: str
+  accept_eula: bool
+  xms_mb: int
+  xmx_mb: int
+  mc_version: str
+  allow_experimental: bool
+  bedrock_support: bool
+  update_plugins: bool
+  plugin_urls:
+    - url
+  # Optional: Java-Version erzwingen (sonst aus den Paper-Metadaten)
+  java_major: int(8,99)?
