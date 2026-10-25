@@ -6,7 +6,7 @@
   <img src="https://img.shields.io/badge/Platform-Home%20Assistant-00bcd4.svg">
   <img src="https://img.shields.io/badge/Type-Add--on-yellow.svg">
   <img src="https://img.shields.io/badge/AMD64-Tested-yellow.svg">
-  <img src="https://img.shields.io/badge/ARM64-Untested-red.svg">
+  <img src="https://img.shields.io/badge/ARM64-Emulation%20tested-yellow.svg">
   <img src="https://img.shields.io/badge/Status-Beta-orange.svg">
 </p>
 
@@ -191,7 +191,8 @@ Game rules are stored in the world, so deleting an entry does not reset the rule
 ## 🧪 Architecture & Status
 
 - **amd64**: tested and working
-- **arm64**: should work, but **not yet fully tested**
+- **arm64**: built and started under emulation (Java 25 for aarch64, server download, clean shutdown),
+  but **not yet run on real hardware**
 
 ARM64 support is implemented (Java + server are architecture-aware),
 but real-world feedback is highly appreciated.

@@ -6,7 +6,7 @@
   <img src="https://img.shields.io/badge/Platform-Home%20Assistant-00bcd4.svg">
   <img src="https://img.shields.io/badge/Type-Add--on-yellow.svg">
   <img src="https://img.shields.io/badge/AMD64-Tested-yellow.svg">
-  <img src="https://img.shields.io/badge/ARM64-Untested-red.svg">
+  <img src="https://img.shields.io/badge/ARM64-Emulation%20tested-yellow.svg">
   <img src="https://img.shields.io/badge/Status-Beta-orange.svg">
 </p>
 
@@ -176,8 +176,9 @@ Game rules are stored in the world, so deleting an entry does not reset the rule
 
 ## Architecture & Status
 
-- **amd64**: startup with Java 25 and clean shutdown tested in Docker. A real Bedrock client has not been
-  tested yet, so NetherNet behind the Home Assistant network bridge is still unverified
-- **arm64**: should work (Java and Paper are architecture-aware), but not yet tested
+- **amd64**: tested on Home Assistant OS: start with Java 25, a Java player and a Bedrock player (connect and chat),
+  and a clean shutdown that saves the world
+- **arm64**: built and started under emulation (Java 25 for aarch64, Paper, Geyser, clean shutdown), but not yet run
+  on real hardware such as a Raspberry Pi
 
 Feedback and test reports are very welcome.
