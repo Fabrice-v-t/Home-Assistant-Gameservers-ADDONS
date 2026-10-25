@@ -52,6 +52,9 @@ options:
   # Geyser + Floodgate installieren (Bedrock-Spieler)
   bedrock_support: true
 
+  # Bedrock-Spieler dürfen chatten (setzt enforce-secure-profile=false, nur mit Bedrock-Unterstützung)
+  bedrock_chat: true
+
   # Geyser/Floodgate bei jedem Start auf die neueste Version aktualisieren
   update_plugins: true
 
@@ -112,6 +115,7 @@ schema:
   mc_version: str
   allow_experimental: bool
   bedrock_support: bool
+  bedrock_chat: bool
   update_plugins: bool
   plugin_urls:
     - url

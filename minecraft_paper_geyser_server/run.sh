@@ -54,6 +54,8 @@ MEMORY_GUARD="$(opt memory_guard)";             : "${MEMORY_GUARD:=true}"
 FIXED_HEAP="$(opt fixed_heap)";                 : "${FIXED_HEAP:=false}"
 [[ "${MEMORY_GUARD}" == "false" ]] || MEMORY_GUARD="true"
 [[ "${FIXED_HEAP}" == "true" ]] || FIXED_HEAP="false"
+BEDROCK_CHAT="$(opt bedrock_chat)";               : "${BEDROCK_CHAT:=true}"
+[[ "${BEDROCK_CHAT}" == "false" ]] || BEDROCK_CHAT="true"
 VIEW_DISTANCE="$(opt view_distance)";             : "${VIEW_DISTANCE:=0}"
 SIMULATION_DISTANCE="$(opt simulation_distance)"; : "${SIMULATION_DISTANCE:=0}"
 MAX_PLAYERS="$(opt max_players)";                 : "${MAX_PLAYERS:=0}"
@@ -682,6 +684,19 @@ set_choice enable-command-block "command_blocks" "${COMMAND_BLOCKS}" "true false
 
 set_text motd "motd" "${MOTD}"
 set_text level-seed "level_seed" "${LEVEL_SEED}"
+
+# Bedrock-Chat: Bedrock kennt Javas Chat-Signierung nicht. Verlangt der Server sie
+# (enforce-secure-profile=true), können Bedrock-Spieler nicht chatten. Der Schalter wirkt nur
+# mit Bedrock-Unterstützung und setzt den Eintrag in beide Richtungen.
+if [[ "${BEDROCK_SUPPORT}" == "true" ]]; then
+  if [[ "${BEDROCK_CHAT}" == "true" ]]; then
+    set_property enforce-secure-profile false
+    log_info "Bedrock-Chat erlaubt (enforce-secure-profile=false)"
+  else
+    set_property enforce-secure-profile true
+    log_info "Bedrock-Chat gesperrt (enforce-secure-profile=true)"
+  fi
+fi
 
 # -----------------------------------------------------------
 # Ressourcen: RAM-Schutz, CPU-Priorität und CPU-Kerne

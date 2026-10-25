@@ -23,7 +23,7 @@ Vanilla: Java version resolved from Mojang's `javaVersion` (25, 21, 17 and the J
 Paper + Geyser: `latest` picks the newest version with a `STABLE` build and skips versions containing `-`,
 `allow_experimental`, a pinned version with its own Java version, `java_major` override, failing plugin
 downloads (server still starts, existing JAR is kept), `update_plugins=false`, `bedrock_support=false`,
-non-https plugin URLs are ignored, the one-time Geyser configuration.
+non-https plugin URLs are ignored, the one-time Geyser configuration. Also the Bedrock chat switch (`enforce-secure-profile` in both directions, untouched without Bedrock support).
 
 Both add-ons: the whitelist, ban list and operator lists (commands sent to the server, sync of added and removed
 entries, invalid names, the whitelist switch). Paper additionally covers Bedrock names with a dot.

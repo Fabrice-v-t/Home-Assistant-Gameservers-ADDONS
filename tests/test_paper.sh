@@ -718,6 +718,41 @@ t_spielregeln_keine() {
   assert_out_lacks "Spielregeln"
 }
 
+t_bedrock_chat() {
+  paper_sandbox "Bedrock-Chat: enforce-secure-profile=false mit Bedrock-Unterstützung"
+  mkdir -p "${DATA}"
+  printf 'enforce-secure-profile=true\nlevel-name=world\n' > "${DATA}/server.properties"
+  run_addon
+  assert_rc 0
+  assert_file_has "server.properties" "enforce-secure-profile=false"
+  assert_file_has "server.properties" "level-name=world"
+  assert_eq "genau ein Eintrag" "1" "$(grep -c '^enforce-secure-profile=' "${DATA}/server.properties")"
+  assert_out_has "Bedrock-Chat erlaubt (enforce-secure-profile=false)"
+
+  # Ausgeschaltet wird der Eintrag wieder auf true gesetzt
+  set_options '{"bedrock_chat": false}'
+  run_addon
+  assert_file_has "server.properties" "enforce-secure-profile=true"
+  assert_out_has "Bedrock-Chat gesperrt (enforce-secure-profile=true)"
+
+  # Ohne Server-Eintrag wird er angelegt
+  rm -f "${DATA}/server.properties"
+  set_options '{}'
+  run_addon
+  assert_file_has "server.properties" "enforce-secure-profile=false"
+}
+
+t_bedrock_chat_ohne_bedrock() {
+  paper_sandbox "Bedrock-Chat: ohne Bedrock-Unterstützung bleibt der Eintrag unangetastet"
+  mkdir -p "${DATA}"
+  printf 'enforce-secure-profile=true\n' > "${DATA}/server.properties"
+  set_options '{"bedrock_support": false}'
+  run_addon
+  assert_rc 0
+  assert_file_has "server.properties" "enforce-secure-profile=true"
+  assert_out_lacks "Bedrock-Chat"
+}
+
 t_server_exitcode_wird_durchgereicht() {
   paper_sandbox "Abstürzender Server: Exit-Code wird durchgereicht"
   export MOCK_JAVA_EXIT_CODE=3
@@ -748,7 +783,7 @@ for t in t_eula_fehlt t_xms_groesser_xmx t_normalstart t_rc_und_vorversionen_wer
          t_geyser_config_bei_bedrock_support_false \
          t_spielerlisten_befehle t_spielerlisten_abgleich t_spielerlisten_ungueltige_namen \
          t_spielerlisten_bedrock t_spielerlisten_bedrock_aus t_spielerlisten_leer \
-         t_server_exitcode_wird_durchgereicht t_ungueltige_version t_cpu_prioritaet t_cpu_kerne t_ram_schutz t_ram_schutz_container_limit t_ram_schutz_ohne_meminfo t_fester_heap t_leistungsprofil t_spielwelt_ueberschreibt_profil t_spielerlebnis t_spielerlebnis_ungueltig t_motd_und_seed t_spielregeln_neue_schreibweise t_spielregeln_alte_schreibweise t_spielregeln_keine; do
+         t_server_exitcode_wird_durchgereicht t_ungueltige_version t_cpu_prioritaet t_cpu_kerne t_ram_schutz t_ram_schutz_container_limit t_ram_schutz_ohne_meminfo t_fester_heap t_leistungsprofil t_spielwelt_ueberschreibt_profil t_spielerlebnis t_spielerlebnis_ungueltig t_motd_und_seed t_spielregeln_neue_schreibweise t_spielregeln_alte_schreibweise t_spielregeln_keine t_bedrock_chat t_bedrock_chat_ohne_bedrock; do
   "${t}"
 done
 

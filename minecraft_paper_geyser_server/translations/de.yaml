@@ -20,6 +20,9 @@ configuration:
   bedrock_support:
     name: Bedrock-Unterstützung
     description: Installiert Geyser und Floodgate, damit Bedrock-Spieler beitreten können.
+  bedrock_chat:
+    name: Bedrock-Chat
+    description: "Erlaubt Bedrock-Spielern zu chatten. Bedrock unterstützt Javas Chat-Signierung nicht, deshalb setzt die Option enforce-secure-profile=false. Ausgeschaltet wird enforce-secure-profile=true gesetzt (dann können Bedrock-Spieler lesen, aber nicht schreiben). Wirkt nur mit Bedrock-Unterstützung."
   update_plugins:
     name: Geyser und Floodgate aktualisieren
     description: Aktualisiert beide Plugins bei jedem Start. Wenn ausgeschaltet, bleiben vorhandene JARs erhalten.

@@ -56,6 +56,14 @@ For an internet-facing server, enable the Minecraft whitelist (`white-list=true`
   a one-time "trust on first use" prompt. Confirm it. It disappears if you serve the signaling over HTTPS,
   see the [Geyser documentation](https://geysermc.org/wiki/geyser/).
 
+## Bedrock chat
+
+Bedrock does not support Java's chat signing. If the server requires it (`enforce-secure-profile=true`, the default),
+Bedrock players can read the chat but cannot write. With `bedrock_chat` on (the default) and Bedrock support enabled, the
+add-on sets `enforce-secure-profile=false` on every start. With `bedrock_chat` off it sets `true` again. The option has no
+effect without Bedrock support. The trade-off: with the signing requirement off, Java players can join without a signed
+chat key too.
+
 ## Geyser configuration
 
 On the first start the add-on creates a minimal `plugins/Geyser-Spigot/config.yml` with two settings:
@@ -75,6 +83,7 @@ version). If Floodgate could not be downloaded, the file is not created and Geys
 | `mc_version` | `latest` (newest version that has a stable Paper build) or a specific version, e.g. `1.21.11` |
 | `allow_experimental` | Also accept beta/alpha Paper builds and pre-releases. PaperMC gives no support for them |
 | `bedrock_support` | Install Geyser and Floodgate |
+| `bedrock_chat` | On by default. Lets Bedrock players chat by setting `enforce-secure-profile=false`. Turn it off to set it to `true` again |
 | `update_plugins` | Refresh Geyser and Floodgate on every start. If `false`, existing jars are kept |
 | `plugin_urls` | Additional plugins as direct `https://...jar` links. Other schemes are ignored |
 | `java_major` | Optional. Forces a Java version. By default it is read from Paper's version metadata |
