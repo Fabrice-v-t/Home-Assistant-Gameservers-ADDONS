@@ -147,6 +147,27 @@ t_java_major_option() {
   assert_calls "Java 25 wird nicht geladen" "adoptium.net/.*/latest/25/" 0
 }
 
+t_java_pruefsumme_falsch() {
+  paper_sandbox "Falsche Java-Prüfsumme: Abbruch, keine Installation"
+  jre_break_checksum 25
+  run_addon
+  assert_rc 1
+  assert_out_has "Prüfsumme des Java-Archivs stimmt nicht überein"
+  assert_no_file ".jre/25"
+  assert_no_file ".jre/25.tmp"
+  assert_no_file "paper.jar"
+  if [[ -s "${MOCK_JAVA_LOG}" ]]; then nok "java wurde unerwartet gestartet"; else ok "java wurde nicht gestartet"; fi
+}
+
+t_adoptium_api_nicht_erreichbar() {
+  paper_sandbox "Adoptium-API nicht erreichbar bricht ab"
+  echo "api.adoptium.net/*" > "${MOCK_FAIL}"
+  run_addon
+  assert_rc 1
+  assert_out_has "Adoptium-API nicht erreichbar"
+  assert_no_file "paper.jar"
+}
+
 t_java_metadaten_fehlen() {
   paper_sandbox "Fehlende Java-Metadaten: Fallback auf Java 25 mit Warnung"
   rm -f "${MOCK_WWW}/fill.papermc.io/v3/projects/paper/versions/26.3/index"
@@ -166,7 +187,7 @@ t_neustart_ohne_redownload() {
   set_options '{"update_plugins": false}'
   run_addon
   assert_rc 0
-  assert_calls "erster Lauf lädt Java" "adoptium" 1
+  assert_calls "erster Lauf lädt Java (API und Archiv)" "adoptium" 2
   assert_calls "erster Lauf lädt Paper" "fill-data" 1
   assert_calls "erster Lauf lädt Geyser und Floodgate" "geysermc" 2
   run_addon
@@ -371,7 +392,8 @@ t_ungueltige_version() {
 for t in t_eula_fehlt t_xms_groesser_xmx t_normalstart t_rc_und_vorversionen_werden_uebersprungen \
          t_allow_experimental t_allow_experimental_beta t_release_vor_rc_bei_experimental \
          t_gepinnte_version_mit_eigener_java_version t_gepinnte_version_ohne_stable_build \
-         t_java_major_option t_java_metadaten_fehlen t_sigterm t_neustart_ohne_redownload \
+         t_java_major_option t_java_pruefsumme_falsch t_adoptium_api_nicht_erreichbar \
+         t_java_metadaten_fehlen t_sigterm t_neustart_ohne_redownload \
          t_neuer_build_laedt_neu t_pruefsumme_falsch t_fill_api_nicht_erreichbar \
          t_plugin_download_scheitert t_plugin_download_liefert_keine_jar t_update_plugins_false \
          t_update_plugins_true t_bedrock_support_false t_plugin_urls \

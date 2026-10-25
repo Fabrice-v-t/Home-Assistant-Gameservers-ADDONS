@@ -22,7 +22,7 @@ Bedrock players (phone, console, Windows) do not need a Java account.
 
 - Newest **stable** Paper build, resolved automatically through the official PaperMC downloads service (Fill v3)
 - Paper download is verified by its SHA-256 checksum
-- The Java version required by the selected Minecraft version is installed automatically (Temurin)
+- The Java version required by the selected Minecraft version is installed automatically (Temurin, checksum verified)
 - Geyser and Floodgate are installed and refreshed on every start
 - Optional extra plugins via direct `https` links
 - EULA must be accepted explicitly (`accept_eula`)

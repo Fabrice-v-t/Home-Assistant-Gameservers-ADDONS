@@ -29,7 +29,7 @@ It is designed to be:
 
 ## ✨ Features
 
-- Automatic **Java installation** (Temurin). The Java version is read from Mojang's
+- Automatic **Java installation** (Temurin, checksum verified). The Java version is read from Mojang's
   version metadata, so every Minecraft version gets the runtime it needs
 - Automatic **Minecraft server download**, verified by its SHA-1 checksum
 - **EULA must be accepted explicitly** (`accept_eula`)

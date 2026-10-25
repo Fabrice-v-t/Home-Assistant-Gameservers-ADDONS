@@ -88,8 +88,8 @@ fetch() {
     -H "User-Agent: ${USER_AGENT}" "$1" -o "$2"
 }
 
-# fill_get <URL>   liefert den Antworttext der Paper-API
-fill_get() {
+# fetch_text <URL>   liefert den Antworttext (Paper-API, Adoptium-API)
+fetch_text() {
   curl -fsSL --retry 3 --retry-delay 2 --proto '=https' --proto-redir '=https' \
     -H "User-Agent: ${USER_AGENT}" "$1"
 }
@@ -110,7 +110,7 @@ resolve_paper() {
   [[ "${ALLOW_EXPERIMENTAL}" == "true" ]] && all_json="true"
 
   if [[ "${MC_VERSION}" == "latest" ]]; then
-    if ! project_json="$(fill_get "${FILL_API}")"; then
+    if ! project_json="$(fetch_text "${FILL_API}")"; then
       log_error "Paper-API (fill.papermc.io) nicht erreichbar"
       return 1
     fi
@@ -129,7 +129,7 @@ resolve_paper() {
 
   for v in ${candidates}; do
     (( ++tries > 10 )) && break
-    builds_json="$(fill_get "${FILL_API}/versions/${v}/builds" 2>/dev/null)" || continue
+    builds_json="$(fetch_text "${FILL_API}/versions/${v}/builds" 2>/dev/null)" || continue
     build_json="$(jq -c --argjson all "${all_json}" \
       'first(.[] | select(type == "object" and .id != null and ($all or .channel == "STABLE"))) // empty' \
       <<<"${builds_json}" 2>/dev/null || true)"
@@ -165,7 +165,7 @@ fi
 # -----------------------------------------------------------
 JAVA_MAJOR="${JAVA_MAJOR_OPT}"
 if [[ -z "${JAVA_MAJOR}" ]]; then
-  VERSION_JSON="$(fill_get "${FILL_API}/versions/${PAPER_VERSION}" 2>/dev/null || true)"
+  VERSION_JSON="$(fetch_text "${FILL_API}/versions/${PAPER_VERSION}" 2>/dev/null || true)"
   JAVA_MAJOR="$(jq -r '.version.java.version.minimum // empty' <<<"${VERSION_JSON}" 2>/dev/null || true)"
 fi
 if [[ -z "${JAVA_MAJOR}" || ! "${JAVA_MAJOR}" =~ ^[0-9]+$ ]]; then
@@ -188,7 +188,7 @@ install_java() {
 
   log_info "Java ${JAVA_MAJOR} nicht gefunden, installiere Temurin JRE"
 
-  local arch adoptium_arch url tmp_tar tmp_dir
+  local arch adoptium_arch assets link sha256 tmp_tar tmp_dir
   arch="$(uname -m)"
   case "${arch}" in
     x86_64|amd64)  adoptium_arch="x64" ;;
@@ -199,13 +199,30 @@ install_java() {
       ;;
   esac
 
-  url="https://api.adoptium.net/v3/binary/latest/${JAVA_MAJOR}/ga/linux/${adoptium_arch}/jre/hotspot/normal/eclipse?project=jdk"
+  # Download-Link und SHA-256 kommen aus derselben API-Antwort, so passen sie zusammen
+  if ! assets="$(fetch_text "https://api.adoptium.net/v3/assets/latest/${JAVA_MAJOR}/hotspot?architecture=${adoptium_arch}&image_type=jre&os=linux&vendor=eclipse")"; then
+    log_error "Adoptium-API nicht erreichbar"
+    exit 1
+  fi
+  link="$(jq -r 'first(.[] | .binary.package.link) // empty' <<<"${assets}" 2>/dev/null || true)"
+  sha256="$(jq -r 'first(.[] | .binary.package.checksum) // empty' <<<"${assets}" 2>/dev/null || true)"
+  if [[ -z "${link}" || -z "${sha256}" ]]; then
+    log_error "Keine Temurin JRE für Java ${JAVA_MAJOR} (${adoptium_arch}) gefunden"
+    exit 1
+  fi
+
   tmp_tar="${TMP_BASE}/jre${JAVA_MAJOR}.tar.gz"
   tmp_dir="${JRE_DIR}.tmp"
 
   rm -rf "${tmp_dir}"
   mkdir -p "${tmp_dir}"
-  fetch "${url}" "${tmp_tar}"
+  fetch "${link}" "${tmp_tar}"
+  if ! echo "${sha256}  ${tmp_tar}" | sha256sum -c - >/dev/null 2>&1; then
+    rm -f "${tmp_tar}"
+    rm -rf "${tmp_dir}"
+    log_error "Prüfsumme des Java-Archivs stimmt nicht überein, Download verworfen"
+    exit 1
+  fi
   tar -xzf "${tmp_tar}" -C "${tmp_dir}" --strip-components=1
   rm -f "${tmp_tar}"
 

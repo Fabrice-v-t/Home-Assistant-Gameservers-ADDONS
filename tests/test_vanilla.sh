@@ -88,6 +88,29 @@ t_java_major_option() {
   assert_calls "Java 25 wird nicht geladen" "adoptium.net/.*/latest/25/" 0
 }
 
+t_java_pruefsumme_falsch() {
+  sandbox "Falsche Java-Prüfsumme: Abbruch, keine Installation" "${SCRIPT}"
+  vanilla_fixture
+  jre_break_checksum 25
+  run_addon
+  assert_rc 1
+  assert_out_has "Prüfsumme des Java-Archivs stimmt nicht überein"
+  assert_no_file ".jre/25"
+  assert_no_file ".jre/25.tmp"
+  assert_no_file "server.jar"
+  assert_java_args_none
+}
+
+t_adoptium_api_nicht_erreichbar() {
+  sandbox "Adoptium-API nicht erreichbar bricht ab" "${SCRIPT}"
+  vanilla_fixture
+  echo "api.adoptium.net/*" > "${MOCK_FAIL}"
+  run_addon
+  assert_rc 1
+  assert_out_has "Adoptium-API nicht erreichbar"
+  assert_no_file "server.jar"
+}
+
 t_alte_java_wird_aufgeraeumt() {
   sandbox "Alte Java-Version wird entfernt (Update von 0.0.2)" "${SCRIPT}"
   vanilla_fixture
@@ -111,7 +134,7 @@ t_neustart_ohne_redownload() {
   vanilla_fixture
   run_addon
   assert_rc 0
-  assert_calls "erster Lauf lädt Java" "adoptium" 1
+  assert_calls "erster Lauf lädt Java (API und Archiv)" "adoptium" 2
   assert_calls "erster Lauf lädt das Server-JAR" "piston-data" 1
   run_addon
   assert_rc 0
@@ -209,7 +232,8 @@ t_server_exitcode_wird_durchgereicht() {
 }
 
 for t in t_eula_fehlt t_xms_groesser_xmx t_normalstart t_java_aus_mojang_metadaten \
-         t_java_major_option t_alte_java_wird_aufgeraeumt t_sigterm \
+         t_java_major_option t_java_pruefsumme_falsch t_adoptium_api_nicht_erreichbar \
+         t_alte_java_wird_aufgeraeumt t_sigterm \
          t_neustart_ohne_redownload t_neue_version_laedt_neu t_pruefsumme_falsch \
          t_unbekannte_version t_manifest_nicht_erreichbar t_eigene_jar_url \
          t_eigene_jar_url_nur_https t_server_exitcode_wird_durchgereicht; do

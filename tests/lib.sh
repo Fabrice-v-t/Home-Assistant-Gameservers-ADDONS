@@ -114,11 +114,28 @@ build_jre_archives() {
     chmod +x "${src}/bin/java"
     echo "${major}" > "${src}/.mock_major"
     for arch in x64 aarch64; do
-      dir="${MOCK_WWW}/api.adoptium.net/v3/binary/latest/${major}/ga/linux/${arch}/jre/hotspot/normal"
-      mkdir -p "${dir}"
-      tar -czf "${dir}/eclipse" -C "${T}/jre-src" "jdk-${major}-jre"
+      # Archiv auf einem GitHub-ähnlichen Host, Link und Prüfsumme in der Assets-API
+      dir="${MOCK_WWW}/github.com/adoptium/mock-binaries"
+      mkdir -p "${dir}" "${MOCK_WWW}/api.adoptium.net/v3/assets/latest/${major}"
+      tar -czf "${dir}/jre-${major}-${arch}.tar.gz" -C "${T}/jre-src" "jdk-${major}-jre"
+      jq -n --arg link "https://github.com/adoptium/mock-binaries/jre-${major}-${arch}.tar.gz" \
+        --arg sha "$(sha256sum "${dir}/jre-${major}-${arch}.tar.gz" | cut -d' ' -f1)" \
+        '[{binary: {package: {link: $link, checksum: $sha}}}]' \
+        > "${MOCK_WWW}/api.adoptium.net/v3/assets/latest/${major}/hotspot.${arch}"
     done
+    # Die Mock-API ignoriert die Query, deshalb wird die Datei zur Laufzeit-Architektur gewählt
+    case "$(uname -m)" in
+      aarch64|arm64) cp "${MOCK_WWW}/api.adoptium.net/v3/assets/latest/${major}/hotspot.aarch64" "${MOCK_WWW}/api.adoptium.net/v3/assets/latest/${major}/hotspot" ;;
+      *)             cp "${MOCK_WWW}/api.adoptium.net/v3/assets/latest/${major}/hotspot.x64" "${MOCK_WWW}/api.adoptium.net/v3/assets/latest/${major}/hotspot" ;;
+    esac
   done
+}
+
+# Setzt in der Mock-Adoptium-API eine falsche Prüfsumme für die angegebene Java-Version
+jre_break_checksum() {
+  local f="${MOCK_WWW}/api.adoptium.net/v3/assets/latest/$1/hotspot"
+  jq '.[0].binary.package.checksum = "0000000000000000000000000000000000000000000000000000000000000000"' "${f}" > "${f}.new"
+  mv "${f}.new" "${f}"
 }
 
 # -----------------------------------------------------------

@@ -180,7 +180,7 @@ install_java() {
 
   log_info "Java ${JAVA_MAJOR} nicht gefunden, installiere Temurin JRE"
 
-  local arch adoptium_arch url tmp_tar tmp_dir
+  local arch adoptium_arch assets link sha256 tmp_tar tmp_dir
   arch="$(uname -m)"
   case "${arch}" in
     x86_64|amd64)  adoptium_arch="x64" ;;
@@ -191,13 +191,30 @@ install_java() {
       ;;
   esac
 
-  url="https://api.adoptium.net/v3/binary/latest/${JAVA_MAJOR}/ga/linux/${adoptium_arch}/jre/hotspot/normal/eclipse?project=jdk"
+  # Download-Link und SHA-256 kommen aus derselben API-Antwort, so passen sie zusammen
+  if ! assets="$(fetch_text "https://api.adoptium.net/v3/assets/latest/${JAVA_MAJOR}/hotspot?architecture=${adoptium_arch}&image_type=jre&os=linux&vendor=eclipse")"; then
+    log_error "Adoptium-API nicht erreichbar"
+    exit 1
+  fi
+  link="$(jq -r 'first(.[] | .binary.package.link) // empty' <<<"${assets}" 2>/dev/null || true)"
+  sha256="$(jq -r 'first(.[] | .binary.package.checksum) // empty' <<<"${assets}" 2>/dev/null || true)"
+  if [[ -z "${link}" || -z "${sha256}" ]]; then
+    log_error "Keine Temurin JRE für Java ${JAVA_MAJOR} (${adoptium_arch}) gefunden"
+    exit 1
+  fi
+
   tmp_tar="${TMP_BASE}/jre${JAVA_MAJOR}.tar.gz"
   tmp_dir="${JRE_DIR}.tmp"
 
   rm -rf "${tmp_dir}"
   mkdir -p "${tmp_dir}"
-  fetch "${url}" "${tmp_tar}"
+  fetch "${link}" "${tmp_tar}"
+  if ! echo "${sha256}  ${tmp_tar}" | sha256sum -c - >/dev/null 2>&1; then
+    rm -f "${tmp_tar}"
+    rm -rf "${tmp_dir}"
+    log_error "Prüfsumme des Java-Archivs stimmt nicht überein, Download verworfen"
+    exit 1
+  fi
   tar -xzf "${tmp_tar}" -C "${tmp_dir}" --strip-components=1
   rm -f "${tmp_tar}"
 
