@@ -21,14 +21,49 @@ timeout: 60
 # Nur die Ports, die gebraucht werden.
 # Die Host-Ports können im HA UI geändert werden.
 # Bedrock nutzt ab 26.60 NetherNet: TCP für das Signaling, UDP für das Spiel (beide 19132).
+#
+# Ports für Plugins: Home Assistant kann Ports nicht per Option öffnen, sie müssen hier vorab
+# stehen. "null" heißt: im Container vorhanden, aber nicht veröffentlicht. Im Tab "Netzwerk"
+# des Add-ons trägt man dazu einen Host-Port ein. Das Plugin muss auf dem hier genannten
+# Container-Port lauschen (Beispiel Dynmap: 8123).
 ports:
   25565/tcp: 25565
   19132/tcp: 19132
   19132/udp: 19132
+  8123/tcp: null
+  8100/tcp: null
+  8804/tcp: null
+  24454/udp: null
+  25575/tcp: null
+  25580/tcp: null
+  25581/tcp: null
+  25582/tcp: null
+  25583/tcp: null
+  25584/tcp: null
+  25580/udp: null
+  25581/udp: null
+  25582/udp: null
+  25583/udp: null
+  25584/udp: null
 ports_description:
   25565/tcp: "Minecraft Java Edition (TCP)"
   19132/tcp: "Minecraft Bedrock Edition via Geyser, Signaling (TCP)"
   19132/udp: "Minecraft Bedrock Edition via Geyser (UDP)"
+  8123/tcp: "Plugin: Dynmap web map (TCP, off by default)"
+  8100/tcp: "Plugin: BlueMap web map (TCP, off by default)"
+  8804/tcp: "Plugin: Plan analytics (TCP, off by default)"
+  24454/udp: "Plugin: Simple Voice Chat (UDP, off by default)"
+  25575/tcp: "RCON remote console (TCP, off by default, only open it with a strong password)"
+  25580/tcp: "Free for plugins (TCP, off by default)"
+  25581/tcp: "Free for plugins (TCP, off by default)"
+  25582/tcp: "Free for plugins (TCP, off by default)"
+  25583/tcp: "Free for plugins (TCP, off by default)"
+  25584/tcp: "Free for plugins (TCP, off by default)"
+  25580/udp: "Free for plugins (UDP, off by default)"
+  25581/udp: "Free for plugins (UDP, off by default)"
+  25582/udp: "Free for plugins (UDP, off by default)"
+  25583/udp: "Free for plugins (UDP, off by default)"
+  25584/udp: "Free for plugins (UDP, off by default)"
 
 map:
   - share:rw

@@ -43,10 +43,32 @@ Bedrock clients from version 26.60 on (planned for October 27th, 2026) only conn
 UDP port for the game, both are 19132 by default. The add-on enables NetherNet for you and publishes
 both. A UDP-only forward is not enough anymore.
 
-The add-on does not use host networking and does not open anything else.
+The add-on does not use host networking and does not open anything else (see "Ports for plugins" for optional extra ports).
 If you want to play from outside your home network, forward exactly these ports on your router
 (19132 for TCP and UDP, 25565 for TCP). Do not forward other ports.
 For an internet-facing server, enable the Minecraft whitelist (`white-list=true` in `server.properties`).
+
+## Ports for plugins
+
+Home Assistant cannot open ports through an add-on option. A port has to be declared in the add-on, and you choose
+the host port in the **Network** section of the add-on configuration. This add-on already declares extra ports that are
+**off by default**. To open one, enter a host port next to it (for example the same number) and restart the add-on.
+Nothing is published until you do that.
+
+| Container port | Meant for |
+|---|---|
+| 8123/tcp | Dynmap web map |
+| 8100/tcp | BlueMap web map |
+| 8804/tcp | Plan analytics |
+| 24454/udp | Simple Voice Chat |
+| 25575/tcp | RCON remote console (only open it with a strong `rcon.password`) |
+| 25580 to 25584, tcp and udp | Free slots for any other plugin |
+
+The plugin has to listen on exactly that **container** port, so set it in the plugin's own configuration (Dynmap
+already uses 8123, BlueMap 8100, Plan 8804, Simple Voice Chat 24454). For a plugin that needs another port, change the
+plugin's port to one of the free slots 25580 to 25584. If you want to reach it from outside your home network, the host
+port also has to be forwarded on your router. A plugin with a port that is not in the table needs an entry in the add-on's
+`config.yaml`, because ports cannot be added at runtime.
 
 ## Connecting
 

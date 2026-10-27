@@ -123,3 +123,18 @@ network:
   25565/tcp: Minecraft Java Edition (TCP)
   19132/tcp: Minecraft Bedrock Edition via Geyser, signaling (TCP)
   19132/udp: Minecraft Bedrock Edition via Geyser (UDP)
+  8123/tcp: "Plugin: Dynmap web map (TCP, off by default)"
+  8100/tcp: "Plugin: BlueMap web map (TCP, off by default)"
+  8804/tcp: "Plugin: Plan analytics (TCP, off by default)"
+  24454/udp: "Plugin: Simple Voice Chat (UDP, off by default)"
+  25575/tcp: "RCON remote console (TCP, off by default, only open it with a strong password)"
+  25580/tcp: "Free for plugins (TCP, off by default)"
+  25581/tcp: "Free for plugins (TCP, off by default)"
+  25582/tcp: "Free for plugins (TCP, off by default)"
+  25583/tcp: "Free for plugins (TCP, off by default)"
+  25584/tcp: "Free for plugins (TCP, off by default)"
+  25580/udp: "Free for plugins (UDP, off by default)"
+  25581/udp: "Free for plugins (UDP, off by default)"
+  25582/udp: "Free for plugins (UDP, off by default)"
+  25583/udp: "Free for plugins (UDP, off by default)"
+  25584/udp: "Free for plugins (UDP, off by default)"
