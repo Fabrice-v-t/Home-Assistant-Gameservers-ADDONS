@@ -6,7 +6,7 @@ description: >
   downloads and verifies the server JAR and stores all data persistently
   in /share. The Minecraft EULA must be accepted explicitly in the
   add-on configuration.
-version: "0.0.3"
+version: "0.0.4"
 
 arch:
   - amd64

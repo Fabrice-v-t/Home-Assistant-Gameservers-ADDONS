@@ -19,7 +19,7 @@ echo "-----------------------------------------------------------"
 # -----------------------------------------------------------
 # Die Paper-Downloads-API (Fill v3) verlangt einen eindeutigen User-Agent
 # mit Kontakt-URL. Bei einem Fork bitte die URL anpassen.
-USER_AGENT="${USER_AGENT:-ha-addon-minecraft-paper-geyser/0.0.1 (https://github.com/cyclemat/Home-Assistant-Gameservers-ADDONS)}"
+USER_AGENT="${USER_AGENT:-ha-addon-minecraft-paper-geyser/0.0.2 (https://github.com/cyclemat/Home-Assistant-Gameservers-ADDONS)}"
 FILL_API="${FILL_API:-https://fill.papermc.io/v3/projects/paper}"
 GEYSER_URL="${GEYSER_URL:-https://download.geysermc.org/v2/projects/geyser/versions/latest/builds/latest/downloads/spigot}"
 FLOODGATE_URL="${FLOODGATE_URL:-https://download.geysermc.org/v2/projects/floodgate/versions/latest/builds/latest/downloads/spigot}"

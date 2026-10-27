@@ -6,7 +6,7 @@ description: >
   the Java version it requires, verifies the download checksum and stores
   all data persistently in /share. The Minecraft EULA must be accepted
   explicitly in the add-on configuration.
-version: "0.0.1"
+version: "0.0.2"
 
 arch:
   - amd64
