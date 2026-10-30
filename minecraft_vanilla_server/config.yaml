@@ -44,6 +44,52 @@ options:
   # Optional: feste Server-JAR URL (überschreibt mc_version, nur https)
   server_jar_url: ""
 
+  # Spielerlisten, werden bei jedem Start mit dem Server abgeglichen
+  # (Whitelist nur aktiv, wenn whitelist_enabled true ist)
+  whitelist_enabled: false
+  whitelist: []
+  ops: []
+  banned_players: []
+
+  # Leistung
+  # custom = server.properties bleibt unangetastet, sonst low, balanced oder high
+  performance_profile: "custom"
+  # normal, low oder lowest: niedrigere Priorität schont Home Assistant
+  cpu_priority: "normal"
+  # Anzahl der CPU-Kerne für den Server, 0 = alle
+  cpu_cores: 0
+  # xmx_mb automatisch begrenzen, damit RAM für System und Home Assistant bleibt
+  memory_guard: true
+  # Xms = Xmx und Heap sofort belegen
+  fixed_heap: false
+
+  # Spielwelt: 0 bzw. -1 lässt den Wert in server.properties unverändert und überschreibt das Leistungsprofil sonst
+  view_distance: 0
+  simulation_distance: 0
+  max_players: 0
+  entity_broadcast_range: 0
+
+  # Spielerlebnis: "default" lässt den Wert in server.properties unverändert
+  difficulty: "default"
+  gamemode: "default"
+  force_gamemode: "default"
+  hardcore: "default"
+  pvp: "default"
+  allow_flight: "default"
+  allow_nether: "default"
+  spawn_monsters: "default"
+  spawn_animals: "default"
+  spawn_npcs: "default"
+  generate_structures: "default"
+  command_blocks: "default"
+  spawn_protection: -1
+  motd: ""
+  # Gilt nur beim Erzeugen einer neuen Welt
+  level_seed: ""
+
+  # Spielregeln als name=wert, z. B. keep_inventory=true (siehe README)
+  game_rules: []
+
 schema:
   data_dir: str
   accept_eula: bool
